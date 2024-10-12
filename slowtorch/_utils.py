@@ -56,9 +56,6 @@ class device:
         defaults to 0.
     """
 
-    type: str = "cpu"
-    index: int = 0
-
     def __init__(self, type: str = "cpu", index: int = 0) -> None:
         """Initialize a new `device` object with default index."""
         self.type = type
