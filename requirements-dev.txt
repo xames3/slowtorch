@@ -1,8 +1,0 @@
-black
-build
-flake8
-isort
-mypy
-mypy-extensions
-twine
-typing_extensions
