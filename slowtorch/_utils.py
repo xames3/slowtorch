@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 10 2025
+Last updated on: Saturday, January 11 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -51,7 +51,7 @@ if t.TYPE_CHECKING:
 
 @function_dispatch
 def calc_strides(
-    size: t.Sequence[int],
+    shape: t.Sequence[int],
     itemsize: int,
 ) -> tuple[int, ...]:
     """Calculate memory strides for traversing a Tensor in row-major
@@ -63,7 +63,7 @@ def calc_strides(
     layout, where elements in the last dimension are stored
     contiguously.
 
-    :param size: A sequence of integers representing the dimensions of
+    :param shape: A sequence of integers representing the dimensions of
         the Tensor. Each integer specifies the size along a particular
         dimension.
     :param itemsize: An integer specifying the size (in bytes) of each
@@ -80,27 +80,27 @@ def calc_strides(
     """
     strides: list[int] = []
     stride: int = itemsize
-    for dim in reversed(size):
+    for dim in reversed(shape):
         strides.append(stride)
         stride *= dim
     return tuple(reversed(strides))
 
 
 @function_dispatch
-def calc_size(size: t.Sequence[int]) -> int:
+def calc_size(shape: t.Sequence[int]) -> int:
     """Calculate the total number of elements in a Tensor based on its
     shape.
 
     The total number of elements in a Tensor is the product of its
-    dimensions, determined by multiplying the sizes along each axis.
+    dimensions, determined by multiplying the shape along each axis.
 
-    :param size: A sequence of integers representing the dimensions of
+    :param shape: A sequence of integers representing the dimensions of
         the Tensor. Each integer specifies the size along a particular
         dimension.
     :return: An integer representing the total number of elements in
         the Tensor.
     """
-    return math.prod(size)
+    return math.prod(shape)
 
 
 @function_dispatch
@@ -113,19 +113,19 @@ def get_step(view: TensorBase) -> int:
     Tensor is C-contiguous (row-major layout), the step size is 1.
     Non-contiguous Tensors return a step size of 0.
 
-    :param view: A Tensor object with attributes `size`, `strides`, and
+    :param view: A Tensor object with attributes `shape`, `strides`, and
         `itemsize`, representing its memory layout.
     :return: An integer step size: 1 for C-contiguous Tensors, 0
         otherwise.
     """
-    contiguous = calc_strides(view.size, view.itemsize)
+    contiguous = calc_strides(view.shape, view.itemsize)
     step = view.strides[-1] // contiguous[-1]
     strides = tuple(stride * step for stride in contiguous)
     return step if view.strides == strides else 0
 
 
 @function_dispatch
-def calc_size_from_obj(object: t.Any) -> Size:
+def calc_shape_from_data(data: t.Any) -> Size:
     """Infer the shape of a nested iterable structure and represent it
     as a Tensor.
 
@@ -133,55 +133,46 @@ def calc_size_from_obj(object: t.Any) -> Size:
     structure (e.g., a list of lists) and converts it into a tuple of
     integers representing the corresponding Tensor shape.
 
-    :param object: A nested iterable structure that can be converted
+    :param data: A nested iterable structure that can be converted
         into a Tensor. Each level of nesting corresponds to a dimension
         in the shape.
-    :return: A tuple of integers representing the size of the input
-        object.
+    :return: A tuple of integers representing the shape of the input
+        data.
     """
-    size: list[int] = []
+    shape: list[int] = []
 
-    def _calc_size(elements: t.Any, axis: int) -> None:
-        """Helper function to calculate size recursively."""
-        if isinstance(elements, t.Sized) and not isinstance(
-            elements, (str, bytes)
-        ):
-            if len(size) <= axis:
-                size.append(0)
-            length = len(elements)
-            if length > size[axis]:
-                size[axis] = length
-            for element in elements:
-                _calc_size(element, axis + 1)
+    def _calc_shape(obj: t.Any, axis: int) -> None:
+        """Helper function to calculate shape recursively."""
+        if isinstance(obj, t.Sized) and not isinstance(obj, (str, bytes)):
+            if len(shape) <= axis:
+                shape.append(0)
+            length = len(obj)
+            if length > shape[axis]:
+                shape[axis] = length
+            for element in obj:
+                _calc_shape(element, axis + 1)
 
-    _calc_size(object, 0)
-    return tuple(size)
+    _calc_shape(data, 0)
+    return tuple(shape)
 
 
 @function_dispatch
-def has_uniform_size(object: TensorBase) -> bool:
+def has_uniform_shape(data: TensorBase) -> bool:
     """Check if a nested iterable structure can form a Tensor with a
-    uniform size.
+    uniform shape.
 
-    A structure has a uniform size if::
+    A structure has a uniform shape if::
 
-        -  All elements along the same axis have the same size.
+        - All elements along the same axis have the same shape.
         - Sub-elements (if any) also follow uniformity.
 
-    :param object: A nested iterable structure to validate for Tensor
+    :param data: A nested iterable structure to validate for Tensor
         compatibility.
-    :return: True if the structure has a uniform size, otherwise False.
+    :return: True if the structure has a uniform shape, otherwise False.
     """
-    if not isinstance(object, t.Iterable):
+    if not isinstance(data, t.Iterable):
         return True
     return (
-        all(has_uniform_size(element) for element in object)
-        and len(
-            set(
-                len(element)
-                for element in object
-                if isinstance(element, t.Sized)
-            )
-        )
-        <= 1
+        all(has_uniform_shape(idx) for idx in data)
+        and len(set(len(idx) for idx in data if isinstance(idx, t.Sized))) <= 1
     )

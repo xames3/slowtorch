@@ -4,7 +4,7 @@ SlowTorch
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, January 07 2025
+Last updated on: Saturday, January 11 2025
 
 SlowTorch is yet another personal pet-project of mine where I tried and
 implemented the basic and bare-bones functionality of PyTorch just using
@@ -63,3 +63,8 @@ def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:
     globals()[func.__name__] = func
     __all__.append(func.__name__)
     return func
+
+
+from ._tensor import *
+
+__all__ += _tensor.__all__

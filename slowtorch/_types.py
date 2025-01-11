@@ -4,7 +4,7 @@ SlowTorch Types API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 10 2025
+Last updated on: Saturday, January 11 2025
 
 This module defines and provides aliases for all simple and composite
 types that are used throughout the SlowTorch framework. The types defined
@@ -30,13 +30,13 @@ __all__: list[str] = [
     "DTypeLikeNested",
     "Number",
     "Size",
-    "TensorBase",
+    "TensorLike",
     "VoidDTypeLike",
 ]
 
 Number: t.TypeAlias = int | float | bool
 Size: t.TypeAlias = tuple[int, ...]
-TensorBase = t.TypeVar("TensorBase")
+TensorLike = t.TypeVar("TensorLike")
 DTypeLikeNested: t.TypeAlias = t.Any
 VoidDTypeLike: t.TypeAlias = (
     tuple[DTypeLikeNested, int]
