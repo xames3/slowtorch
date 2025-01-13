@@ -66,5 +66,7 @@ def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:
 
 
 from ._tensor import *
+from ._utils import *
 
 __all__ += _tensor.__all__
+__all__ += _utils.__all__

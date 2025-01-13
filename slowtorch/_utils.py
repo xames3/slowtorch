@@ -45,15 +45,121 @@ import typing as t
 from slowtorch import function_dispatch
 
 if t.TYPE_CHECKING:
-    from slowtorch._types import Size
-    from slowtorch._types import TensorBase
+    from slowtorch._tensor import Tensor
+    from slowtorch._types import Number
+
+__all__: list[str] = [
+    "device",
+    "dtype",
+]
+
+
+@function_dispatch
+class Device:
+    """Represent a computational device for executing Tensor operations.
+
+    The `Device` class in SlowTorch encapsulates the concept of a
+    computation backend, such as `cpu`. It provides a way to specify the
+    target device where Tensor computations will occur, including
+    support for multi-device systems using an optional device index.
+
+    This abstraction allows users to explicitly manage computational
+    resources, mimicking PyTorch's `torch.device` behavior.
+
+    :param type: The type of the device, defaults to `cpu`.
+    :param index: An optional index representing the device number,
+        defaults to 0.
+    """
+
+    __module__: str = "slowtorch"
+    __qualname__: str = "device"
+
+    def __init__(self, type: str = "cpu", index: int = 0) -> None:
+        """Initialize a new `Device` object with default index."""
+        self.type = type
+        self.index = index
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Device` object."""
+        return f"device(type={self.type!r}, index={self.index})"
+
+    def __str__(self) -> str:
+        """Return a human-readable string representation."""
+        return f"{self.type}:{self.index}"
+
+
+DeviceType: t.TypeAlias = None | str | int | Device
+device = Device
+
+
+@function_dispatch
+class Dtype:
+    """Represent data types used in the SlowTorch framework.
+
+    The `Dtype` class encapsulates information about supported datatypes
+    for tensor operations and storage in SlowTorch. It provides a way to
+    describe the type of data stored in tensors, its size in bytes, and
+    associated metadata.
+
+    :param name: The full name of the datatype.
+    :param short: A shorthand representation of the datatype, where the
+        last character specifies the size in bytes.
+    :param data: A representation of the type's data structure or
+        internal details.
+    :param value: A representative value for the data type, used for
+        internal operations or comparisons.
+    """
+
+    __module__: str = "slowtorch"
+    __qualname__: str = "dtype"
+
+    def __init__(
+        self,
+        name: str,
+        short: str,
+        data: t.Any,
+        value: Number | bool,
+    ) -> None:
+        """Initialize a new `Dtype` object with name and value."""
+        self.name = name
+        self.itemsize = int(short[-1])
+        self.data = data
+        self.value = value
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Dtype` object."""
+        return f"slowtorch.{self.name}"
+
+
+dtype = Dtype
+
+
+@function_dispatch
+class Size(tuple[int, ...]):
+    """Represent the shape of a tensor as a tuple of integers.
+
+    This class extends the built-in tuple to provide a clear and
+    descriptive representation for tensor dimensions.
+
+    :param shape: A tuple representing the dimensions of the tensor.
+    """
+
+    def __init__(self, shape: tuple[int, ...]) -> None:
+        """Initialize a `Size` instance with some shape."""
+        if not all(isinstance(dim, int) and dim >= 0 for dim in shape):
+            raise ValueError("Dimensions must be non-negative")
+        self.value = shape
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Size` object."""
+        return f"slowtorch.{type(self).__qualname__}({list(self.value)})"
 
 
 @function_dispatch
 def calc_strides(
     shape: t.Sequence[int],
     itemsize: int,
-) -> tuple[int, ...]:
+) -> Size:
     """Calculate memory strides for traversing a Tensor in row-major
     order.
 
@@ -83,7 +189,7 @@ def calc_strides(
     for dim in reversed(shape):
         strides.append(stride)
         stride *= dim
-    return tuple(reversed(strides))
+    return Size(tuple(reversed(strides)))
 
 
 @function_dispatch
@@ -104,7 +210,7 @@ def calc_size(shape: t.Sequence[int]) -> int:
 
 
 @function_dispatch
-def get_step(view: TensorBase) -> int:
+def get_step(view: Tensor) -> int:
     """Calculate the step size for traversing a Tensor along its last
     dimension.
 
@@ -119,9 +225,9 @@ def get_step(view: TensorBase) -> int:
         otherwise.
     """
     contiguous = calc_strides(view.shape, view.itemsize)
-    step = view.strides[-1] // contiguous[-1]
+    step = view._strides[-1] // contiguous[-1]
     strides = tuple(stride * step for stride in contiguous)
-    return step if view.strides == strides else 0
+    return step if view._strides == strides else 0
 
 
 @function_dispatch
@@ -153,11 +259,11 @@ def calc_shape_from_data(data: t.Any) -> Size:
                 _calc_shape(element, axis + 1)
 
     _calc_shape(data, 0)
-    return tuple(shape)
+    return Size(tuple(shape))
 
 
 @function_dispatch
-def has_uniform_shape(data: TensorBase) -> bool:
+def has_uniform_shape(data: Tensor) -> bool:
     """Check if a nested iterable structure can form a Tensor with a
     uniform shape.
 
