@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Sunday, January 12 2025
+Last updated on: Monday, January 13 2025
 
 Tensor object.
 
@@ -216,9 +216,9 @@ class Tensor:
         else:
             r = repr(self._buffer[offset])
             if "." in r and r.endswith(".0"):
-                r = f" {r[:-1]:>{whitespace}}"
+                r = f"{r[:-1]:>{whitespace}}"
             else:
-                r = f" {r:>{whitespace}}"
+                r = f"{r:>{whitespace}}"
             formatted += r
         return formatted
 
@@ -227,7 +227,7 @@ class Tensor:
         whitespace = max(
             len(str(self._buffer[idx])) for idx in range(self.nelement())
         )
-        formatted = self.format_repr("", 0, self._offset, 7, whitespace - 1)
+        formatted = self.format_repr("", 0, self._offset, 7, whitespace)
         if self.dtype not in (float32, int32, bool):
             return f"tensor({formatted}, dtype={self.dtype})"
         else:
@@ -311,7 +311,20 @@ class Tensor:
         exactly one element.
         """
         if self.nelement() == 1:
-            return int(self.buffer[self._offset])
+            return builtins.int(self.buffer[self._offset])
+        else:
+            raise TypeError("Only tensor of size 1 can be converted to scalar")
+
+    def __bool__(self) -> None | float:
+        """Convert the tensor to a scalar bool if it has exactly one
+        element.
+
+        This method attempts to convert an tensor instance to a scalar
+        bool. The conversion is only possible if the tensor contains
+        exactly one element.
+        """
+        if self.nelement() == 1:
+            return builtins.bool(self.buffer[self._offset])
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
@@ -329,9 +342,17 @@ class Tensor:
         return self.shape[0]
 
     def __getitem__(
-        self, key: int | slice | tuple[int | slice | None, ...]
+        self,
+        key: builtins.int | slice | tuple[builtins.int | slice | None, ...],
     ) -> t.Any | "Tensor":
-        """...
+        """Retrieve a scalar or a sub-tensor based on the specified index
+        or slice.
+
+        This method provides support for advanced indexing, including
+        single indices, slices, or tuples of indices and slices,
+        allowing flexible access to tensor elements or sub-tensors. For
+        scalar values, a single element is returned. For subarrays, a
+        new tensor object is created and returned.
 
         :param key: Index or slice object, or tuple of them.
         :return: Scalar or sub-array as per the indexing operation.
@@ -353,10 +374,16 @@ class Tensor:
 
     def __setitem__(
         self,
-        key: int | slice | tuple[None | int | slice, ...],
-        value: builtins.float | int | t.Sequence[Number] | Tensor,
+        key: builtins.int | slice | tuple[None | builtins.int | slice, ...],
+        value: builtins.float | builtins.int | t.Sequence[Number] | Tensor,
     ) -> None:
-        """...
+        """Assign a value to a specific element or subarray within the
+        tensor.
+
+        This method supports element-wise or block-wise assignment using
+        indexing or slicing. The assigned value can be a scalar, a
+        sequence (e.g., list or tuple), or another tensor. If assigning
+        to a subarray, the value must match the shape of the subarray.
 
         :param key: Index or slice to identify the element or subarray
             to update.
@@ -384,7 +411,7 @@ class Tensor:
             offset=offset,
             strides=strides,
         )
-        if isinstance(value, (builtins.float, int)):
+        if isinstance(value, Number):
             array_like = [value] * new_tensor.nelement()
         elif isinstance(value, Iterable):
             array_like = list(value)
@@ -787,6 +814,14 @@ class Tensor:
                 f"and {type(other).__name__!r}"
             )
 
+    def __rpow__(self, other: Number | Tensor) -> Tensor:
+        """Perform reverse exponentiation, delegating to `__pow__`.
+
+        :param other: The left-hand operand.
+        :return: The result of the exponentiation.
+        """
+        return self.__pow__(other)
+
     def __lt__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise less-than operation of the tensor with a
         scalar or another tensor.
@@ -939,11 +974,6 @@ class Tensor:
         return self._dtype
 
     @property
-    def shape(self) -> Size:
-        """Return shape of the tensor."""
-        return self._shape
-
-    @property
     def is_cuda(self) -> t.Literal[False]:
         """Return True if tensor is stored on GPU else False."""
         return False
@@ -980,7 +1010,12 @@ class Tensor:
 
     itemsize = property(element_size)
 
-    @shape.setter  # type: ignore
+    @property
+    def shape(self) -> Size:
+        """Return shape of the tensor."""
+        return self._shape
+
+    @shape.setter
     def shape(self, value: Size) -> None:
         """Set a new shape for the tensor."""
         if value == self.shape:
