@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, January 13 2025
+Last updated on: Tuesday, January 14 2025
 
 Tensor object.
 
@@ -19,7 +19,40 @@ multidimensional arrays and supports features like automatic
 differentiation, and flexible data types. Whereas, the `tensor` function
 is a factory function to create tensors from nested data structures. It
 infers tensor shape, data type, and supports optional device
-specification and gradient requirements.
+specification and gradient requirements. Designed with flexibility,
+efficiency, and modularity in mind, the `Tensor` class aims to replicate
+and innovate upon the core features of PyTorch tensors while emphasizing
+a Python-standard-library-only approach. Additionally, the class
+introduces a Pythonic, educational perspective, making it suitable for
+learning and experimentation with tensor mechanics without relying on
+external libraries.
+
+As of now, the module supports features such as::
+
+    - Efficient storage and representation of n-dimensional data.
+    - Flexible shape manipulation, including reshaping and broadcasting.
+    - Element-wise operations, including arithmetic, logical, and
+      comparison operations, via rich operator overloading.
+    - Slicing and indexing support for intuitive data access.
+    - Conversion utilities to export data to native Python types
+      (e.g., lists).
+
+The `Tensor` implementation draws inspiration from PyTorch's
+architecture but deliberately simplifies and reimagines certain aspects
+for educational purposes and to meet the constraints of pure Python. By
+eschewing C or Cython extensions, the `Tensor` class offers an
+accessible implementation that emphasizes algorithmic clarity over raw
+performance.
+
+In addition to the core `Tensor` functionality, this module introduces
+several helper functions to aid in tensor manipulation and generation.
+These functions are designed to complement the `Tensor` class and mimic
+key functionality found in PyTorch.
+
+While this module implements many fundamental features of `Tensor`, it
+does not aim to match PyTorch's performance or breadth. Instead, the
+focus is on clarity, usability, and modularity, providing a platform for
+learning and experimentation.
 """
 
 from __future__ import annotations
