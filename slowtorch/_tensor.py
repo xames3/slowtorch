@@ -127,13 +127,13 @@ class Tensor:
 
     def __init__(
         self,
-        shape: Size,
+        shape: Size | tuple[int, ...] | int,
         dtype: None | Dtype = float32,
         device: DeviceType = None,
         requires_grad: builtins.bool = False,
         buffer: None | t.Any = None,
         offset: t.SupportsIndex = 0,
-        strides: None | Size = None,
+        strides: None | Size | tuple[int, ...] = None,
     ) -> None:
         """Initialize a `tensor` object from provided shape."""
         if device is not None and device.type != "cpu":
@@ -143,8 +143,8 @@ class Tensor:
         self._device = device or Device()
         self._requires_grad = requires_grad
         if not isinstance(shape, Iterable):
-            raise TypeError("Shape must be an iterable of integers")
-        self._shape = Size(tuple(int(dim) for dim in shape))
+            shape = (shape,)
+        self._shape = tuple(int(dim) for dim in shape)
         if dtype is None:
             dtype = float32
         elif isinstance(dtype, type):
@@ -235,7 +235,7 @@ class Tensor:
 
     def calculate_offset_shape_strides(
         self, key: int | slice | tuple[None | int | slice, ...] | t.Ellipsis
-    ) -> tuple[int, Size, Size]:
+    ) -> tuple[int, tuple[int, ...], tuple[int, ...]]:
         """Calculate offset, shape, and strides for an indexing
         operation.
 
@@ -287,7 +287,7 @@ class Tensor:
                 raise TypeError(f"Invalid index type: {type(dim).__name__!r}")
         shape.extend(self.shape[axis:])
         strides.extend(self._strides[axis:])
-        return offset, Size(tuple(shape)), Size(tuple(strides))
+        return offset, tuple(shape), tuple(strides)
 
     def __float__(self) -> None | float:
         """Convert the tensor to a scalar float if it has exactly one
@@ -1011,7 +1011,7 @@ class Tensor:
     itemsize = property(element_size)
 
     @property
-    def shape(self) -> Size:
+    def shape(self) -> Size | tuple[int, ...]:
         """Return shape of the tensor."""
         return self._shape
 
@@ -1117,7 +1117,7 @@ class Tensor:
 
     numel = nelement
 
-    def size(self, dim: None | int = None) -> Size | int:
+    def size(self, dim: None | int = None) -> Size | tuple[int, ...] | int:
         """Returns the size of the tensor."""
         if dim is not None:
             return self._shape[dim]
@@ -1207,7 +1207,7 @@ class Tensor:
         """
         if self.ndim == 1:
             itemsize = self._dtype.itemsize
-            size = Size((self.nbytes // itemsize,))
+            size = (self.nbytes // itemsize,)
             offset = (self._offset * self.itemsize) // itemsize
             return Tensor(
                 size,
@@ -1243,7 +1243,7 @@ class Tensor:
             reshaped copy.
         """
         if shape == -1:
-            new_tensor = Tensor(Size((self.nelement(),)), self._dtype)
+            new_tensor = Tensor((self.nelement(),), self._dtype)
             new_tensor[:] = self
             return new_tensor
         new_tensor = self._view()
@@ -1343,7 +1343,7 @@ class Tensor:
     def flatten(self) -> Tensor:
         """Return a copy of the tensor collapsed into one dimension."""
         new_tensor = Tensor(
-            Size((self.nelement(),)),
+            (self.nelement(),),
             self._dtype,
             self._device,
             self._requires_grad,
@@ -1404,7 +1404,7 @@ class Tensor:
         """
         size = len((unique := set(self._buffer)))
         new_tensor = Tensor(
-            Size((size,)),
+            (size,),
             self._dtype,
             self._device,
             self._requires_grad,
