@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Sunday, January 12 2025
+Last updated on: Tuesday, January 14 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import math
 import typing as t
+from collections.abc import Iterable
 
 from slowtorch import function_dispatch
 
@@ -51,7 +52,18 @@ if t.TYPE_CHECKING:
 __all__: list[str] = [
     "device",
     "dtype",
+    "e",
+    "inf",
+    "nan",
+    "newaxis",
+    "pi",
 ]
+
+e: float = math.e
+inf: float = float("inf")
+nan: float = float("nan")
+newaxis: t.NoneType = None
+pi: float = math.pi
 
 
 @function_dispatch
@@ -193,19 +205,21 @@ def calc_strides(
 
 
 @function_dispatch
-def calc_size(shape: t.Sequence[int]) -> int:
+def calc_size(shape: t.Sequence[int] | int) -> int:
     """Calculate the total number of elements in a Tensor based on its
     shape.
 
     The total number of elements in a Tensor is the product of its
     dimensions, determined by multiplying the shape along each axis.
 
-    :param shape: A sequence of integers representing the dimensions of
-        the Tensor. Each integer specifies the size along a particular
-        dimension.
+    :param shape: An integer or sequence of integers representing the
+        dimensions of the Tensor. Each integer specifies the size along a
+        particular dimension.
     :return: An integer representing the total number of elements in
         the Tensor.
     """
+    if not isinstance(shape, Iterable):
+        shape = (shape,)
     return math.prod(shape)
 
 
