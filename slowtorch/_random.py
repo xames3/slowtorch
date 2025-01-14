@@ -36,32 +36,32 @@ class Generator:
     def __init__(self, device: DeviceType = None) -> None:
         """Initialize a `Generator` instance with device."""
         self.device = device
-        self.generator = random.Random()
-        self.internal_seed = self.generator.randint(0, 999)
+        self.internal = random.Random()
+        self._seed = self.internal.randint(0, 999)
 
     def get_state(self) -> Tensor:
         """Retrieve the internal RNG state.
 
         :return: State of RNG as a `slowtorch.Tensor`.
         """
-        return tensor(self.generator.getstate())
+        return tensor(self.internal.getstate())
 
     def set_state(self, state: tuple[int, ...]) -> None:
         """Set the internal RNG state.
 
         :param state: State to restore the RNG to.
         """
-        self.generator.setstate(state)
+        self.internal.setstate(state)
 
     def initial_seed(self) -> int:
         """Set the seed for RNG to ensure reproducibility."""
-        return self.internal_seed
+        return self._seed
 
     seed = initial_seed
 
     def manual_seed(self, seed: int) -> Generator:
         """Set the seed for RNG to ensure reproducibility."""
-        self.generator.seed(seed)
+        self.internal.seed(seed)
         return self
 
 
