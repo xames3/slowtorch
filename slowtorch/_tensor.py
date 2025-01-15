@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, January 14 2025
+Last updated on: Wednesday, January 15 2025
 
 Tensor object.
 
@@ -118,6 +118,37 @@ for dtype in supported_dtypes:
     globals()[dtype] = dtype
 
 
+class Node:
+    """Represent a node in the computational graph for gradient
+    computation.
+
+    A `Node` encapsulates the gradient function (`backward`) and its
+    associated input tensors. It is responsible for executing the
+    gradient computation during backpropagation.
+
+    :param backward: A callable function that computes the gradient for
+        this node, defaults to `None`.
+    :var inputs: Tuple of input tensors connected to this node in the
+        graph, defaults to `()`.
+    """
+
+    inputs: tuple[Tensor] = ()
+
+    def __init__(self, backward: None | t.Callable[..., t.Any] = None) -> None:
+        """Initialize a `Node` instance."""
+        self.backward = backward
+        self.name = backward.__name__ if backward else None
+
+    def __call__(self) -> None:
+        """Execute the gradient function for this node, if defined.
+
+        This method propagates the gradient through the inputs of the
+        node by invoking the `backward`.
+        """
+        if self.backward:
+            self.backward()
+
+
 @function_dispatch
 class Tensor:
     """Represent a multi-dimensional tensor object.
@@ -148,20 +179,23 @@ class Tensor:
     __module__: str = "slowtorch"
     __slots__: tuple[str, ...] = (
         "_base",
-        "_buffer",
-        "_device",
+        "_cdata",
         "_dtype",
         "_itemsize",
         "_offset",
-        "_requires_grad",
         "_shape",
         "_strides",
+        "data",
+        "device",
+        "grad",
+        "grad_fn",
+        "requires_grad",
     )
 
     def __init__(
         self,
         shape: Size | tuple[int, ...] | int,
-        dtype: None | Dtype = float32,
+        dtype: None | Dtype = float64,
         device: DeviceType = None,
         requires_grad: builtins.bool = False,
         buffer: None | t.Any = None,
@@ -173,13 +207,13 @@ class Tensor:
             raise RuntimeError(
                 f"{type(self).__qualname__} supports only device type: cpu"
             )
-        self._device = device or Device()
-        self._requires_grad = requires_grad
+        self.device = device or Device()
+        self.requires_grad = requires_grad
         if not isinstance(shape, Iterable):
             shape = (shape,)
         self._shape = tuple(int(dim) for dim in shape)
         if dtype is None:
-            dtype = float32
+            dtype = float64
         elif isinstance(dtype, type):
             dtype = globals()[
                 f"{dtype.__name__}{'32' if dtype != builtins.bool else ''}"
@@ -218,11 +252,14 @@ class Tensor:
         Buffer = self._dtype.data * buffersize
         if buffer is None:
             if not isinstance(Buffer, str):
-                self._buffer = Buffer()
+                self._cdata = Buffer()
         elif isinstance(buffer, ctypes.Array):
-            self._buffer = Buffer.from_address(ctypes.addressof(buffer))
+            self._cdata = Buffer.from_address(ctypes.addressof(buffer))
         else:
-            self._buffer = Buffer.from_buffer(buffer)
+            self._cdata = Buffer.from_buffer(buffer)
+        self.grad: Tensor = None
+        self.grad_fn: Node = Node()
+        self.data = self
 
     def format_repr(
         self,
@@ -247,7 +284,7 @@ class Tensor:
                     formatted += ", "
             formatted += "]"
         else:
-            r = repr(self._buffer[offset])
+            r = repr(self._cdata[offset])
             if "." in r and r.endswith(".0"):
                 r = f"{r[:-1]:>{whitespace}}"
             else:
@@ -258,13 +295,18 @@ class Tensor:
     def __repr__(self) -> str:
         """Return a string representation of `Tensor` object."""
         whitespace = max(
-            len(str(self._buffer[idx])) for idx in range(self.nelement())
+            len(str(self._cdata[idx])) for idx in range(self.nelement())
         )
         formatted = self.format_repr("", 0, self._offset, 7, whitespace)
-        if self.dtype not in (float32, int32, bool):
-            return f"tensor({formatted}, dtype={self.dtype})"
+        extra: str = ""
+        if self.requires_grad:
+            extra = ", requires_grad=True"
+            if self.grad_fn.name:
+                extra = f", grad_fn=<{self.grad_fn.name}>"
+        if self.dtype not in (float64, int64, bool):
+            return f"tensor({formatted}, dtype={self.dtype}{extra})"
         else:
-            return f"tensor({formatted})"
+            return f"tensor({formatted}{extra})"
 
     def calculate_offset_shape_strides(
         self, key: int | slice | tuple[None | int | slice, ...] | t.Ellipsis
@@ -326,7 +368,7 @@ class Tensor:
         """Convert the tensor to a scalar float if it has exactly one
         element.
 
-        This method attempts to convert an tensor instance to a scalar
+        This method attempts to convert a tensor instance to a scalar
         float. The conversion is only possible if the tensor contains
         exactly one element.
         """
@@ -339,7 +381,7 @@ class Tensor:
         """Convert the tensor to a scalar int if it has exactly one
         element.
 
-        This method attempts to convert an tensor instance to a scalar
+        This method attempts to convert a tensor instance to a scalar
         int. The conversion is only possible if the tensor contains
         exactly one element.
         """
@@ -352,7 +394,7 @@ class Tensor:
         """Convert the tensor to a scalar bool if it has exactly one
         element.
 
-        This method attempts to convert an tensor instance to a scalar
+        This method attempts to convert a tensor instance to a scalar
         bool. The conversion is only possible if the tensor contains
         exactly one element.
         """
@@ -394,12 +436,12 @@ class Tensor:
         """
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
-            return self._buffer[offset]
+            return self._cdata[offset]
         return Tensor(
             shape,
             self._dtype,
-            self._device,
-            self._requires_grad,
+            self.device,
+            self.requires_grad,
             buffer=self,
             offset=offset,
             strides=strides,
@@ -433,13 +475,13 @@ class Tensor:
         """
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
-            self._buffer[offset] = value
+            self._cdata[offset] = value
             return
         new_tensor = Tensor(
             shape,
             self._dtype,
-            self._device,
-            self._requires_grad,
+            self.device,
+            self.requires_grad,
             buffer=self,
             offset=offset,
             strides=strides,
@@ -453,8 +495,8 @@ class Tensor:
                 value = Tensor(  # type: ignore
                     value,
                     self._dtype,
-                    self._device,
-                    self._requires_grad,
+                    self.device,
+                    self.requires_grad,
                 )
             array_like = value.flat()
         if new_tensor.nelement() != len(array_like):
@@ -473,7 +515,7 @@ class Tensor:
                         converted.append(int(element))
                     else:
                         converted.append(element)
-                sub_tensor._buffer[
+                sub_tensor._cdata[
                     slice(
                         sub_tensor._offset,
                         sub_tensor._offset + sub_tensor.nelement() * step_size,
@@ -498,42 +540,60 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             addition.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
+        new_tensor: Tensor
         if isinstance(other, int):
-            new_tensor = Tensor(self.shape, self._dtype)
-            new_tensor[:] = [x + other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, self._dtype, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x + other for x in self._cdata]
         elif isinstance(other, float):
-            new_tensor = Tensor(self.shape, float32)
-            new_tensor[:] = [x + other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, float64, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x + other for x in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int32
+                int64
                 if all(
                     map(
                         lambda x: not x.name.startswith(("float", "bool")),
                         (self.dtype, other.dtype),
                     )
                 )
-                else float32
+                else float64
             )
-            new_tensor = Tensor(self.shape, dtype)
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x + y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for +: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+
+        def AddBackward0() -> None:
+            """Backpropagation implementation for addition.
+
+            Computes gradients for `self` and `other` and propagates
+            them.
+            """
+            if None in (self.grad, other.grad):
+                self.grad = other.grad = Tensor((1,), dtype)
+            self.grad += new_tensor.grad
+            other.grad += new_tensor.grad
+
+        new_tensor.grad_fn = Node(AddBackward0)
+        new_tensor.grad_fn.inputs = (self, other)
+        return new_tensor
 
     def __radd__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse addition, delegating to `__add__`.
@@ -555,42 +615,60 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             subtraction.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
+        new_tensor: Tensor
         if isinstance(other, int):
-            new_tensor = Tensor(self.shape, self._dtype)
-            new_tensor[:] = [x - other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, self._dtype, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x - other for x in self._cdata]
         elif isinstance(other, float):
-            new_tensor = Tensor(self.shape, float32)
-            new_tensor[:] = [x - other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, float64, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x - other for x in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int32
+                int64
                 if all(
                     map(
                         lambda x: not x.name.startswith(("float", "bool")),
                         (self.dtype, other.dtype),
                     )
                 )
-                else float32
+                else float64
             )
-            new_tensor = Tensor(self.shape, dtype)
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x - y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for -: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+
+        def SubBackward0() -> None:
+            """Backpropagation implementation for subtraction.
+
+            Computes gradients for `self` and `other` and propagates
+            them.
+            """
+            if None in (self.grad, other.grad):
+                self.grad = other.grad = Tensor((1,), dtype)
+            self.grad += new_tensor.grad
+            other.grad -= new_tensor.grad
+
+        new_tensor.grad_fn = Node(SubBackward0)
+        new_tensor.grad_fn.inputs = (self, other)
+        return new_tensor
 
     def __rsub__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse subtraction, delegating to `__sub__`.
@@ -612,42 +690,60 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             multiplication.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
+        new_tensor: Tensor
         if isinstance(other, int):
-            new_tensor = Tensor(self.shape, self._dtype)
-            new_tensor[:] = [x * other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, self._dtype, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x * other for x in self._cdata]
         elif isinstance(other, float):
-            new_tensor = Tensor(self.shape, float32)
-            new_tensor[:] = [x * other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, float64, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x * other for x in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int32
+                int64
                 if all(
                     map(
                         lambda x: not x.name.startswith(("float", "bool")),
                         (self.dtype, other.dtype),
                     )
                 )
-                else float32
+                else float64
             )
-            new_tensor = Tensor(self.shape, dtype)
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x * y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
-                f"Unsupported operand type(s) for *: {type(self).__name__!r} "
+                f"Unsupported operand type(s) for +: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+
+        def MulBackward0() -> None:
+            """Backpropagation implementation for multiplication.
+
+            Computes gradients for `self` and `other` and propagates
+            them.
+            """
+            if None in (self.grad, other.grad):
+                self.grad = other.grad = Tensor((1,), dtype)
+            self.grad += other * new_tensor.grad
+            other.grad += self * new_tensor.grad
+
+        new_tensor.grad_fn = Node(MulBackward0)
+        new_tensor.grad_fn.inputs = (self, other)
+        return new_tensor
 
     def __rmul__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse multiplication, delegating to `__mul__`.
@@ -669,11 +765,11 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             division.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self.shape, self._dtype)
+        new_tensor: Tensor
         if isinstance(other, Number):
             data = []
             for idx in self._data:
@@ -681,8 +777,10 @@ class Tensor:
                     data.append(idx / other)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
+            new_tensor = Tensor(
+                self.shape, self._dtype, requires_grad=self.requires_grad
+            )
             new_tensor[:] = data
-            return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -695,12 +793,28 @@ class Tensor:
                     data.append(x / y)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = data
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for /: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+
+        def DivBackward0() -> None:
+            """Backpropagation implementation for division.
+
+            Computes gradients for `self` and `other` and propagates
+            them.
+            """
+            if None in (self.grad, other.grad):
+                self.grad = other.grad = Tensor((1,), dtype)
+            self.grad += new_tensor.grad / other
+            other.grad -= new_tensor.grad * (self / (other**2))
+
+        new_tensor.grad_fn = Node(DivBackward0)
+        new_tensor.grad_fn.inputs = (self, other)
         return new_tensor
 
     def __floordiv__(self, other: Number | Tensor) -> Tensor:
@@ -715,11 +829,11 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             division.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self.shape, self._dtype)
+        new_tensor: Tensor
         if isinstance(other, Number):
             data = []
             for idx in self._data:
@@ -727,8 +841,10 @@ class Tensor:
                     data.append(idx // other)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
+            new_tensor = Tensor(
+                self.shape, self._dtype, requires_grad=self.requires_grad
+            )
             new_tensor[:] = data
-            return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -741,12 +857,106 @@ class Tensor:
                     data.append(x // y)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = data
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for //: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+
+        def DivBackward0() -> None:
+            """Backpropagation implementation for division.
+
+            Computes gradients for `self` and `other` and propagates
+            them.
+            """
+            if None in (self.grad, other.grad):
+                self.grad = other.grad = Tensor((1,), dtype)
+            self.grad += new_tensor.grad / other
+            other.grad -= new_tensor.grad * (self / (other**2))
+
+        new_tensor.grad_fn = Node(DivBackward0)
+        new_tensor.grad_fn.inputs = (self, other)
+        return new_tensor
+
+    def __matmul__(self, other: Tensor) -> Tensor:
+        """Perform element-wise matrix multiplication of the tensor with
+        another tensor.
+
+        This method supports matrix multiplication with other tensors of
+        the same shape. The resulting tensor is of the same shape and
+        dtype as the input.
+
+        :param other: The operand for matrix multiplication.
+        :return: A new tensor containing the result of the element-wise
+            matrix multiplication.
+        :raises TypeError: If `other` is not a tensor.
+        :raises ValueError: If `other` is a tensor but its shape doesn't
+            match `self.shape`.
+        """
+        new_tensor: Tensor
+        if isinstance(other, Tensor):
+            dtype = (
+                int64
+                if all(
+                    map(
+                        lambda x: not x.name.startswith(("float", "bool")),
+                        (self.dtype, other.dtype),
+                    )
+                )
+                else float64
+            )
+            requires_grad = self.requires_grad or other.requires_grad
+            if self.ndim == 1 and other.ndim == 1:
+                if self.shape[0] != other.shape[0]:
+                    raise ValueError(
+                        "Shapes of 1D tensors must be the same for dot product"
+                    )
+                new_tensor = Tensor((1,), dtype, requires_grad=requires_grad)
+                new_tensor[:] = sum(
+                    self[idx] * other[idx] for idx in range(self.shape[0])
+                )
+            elif self.ndim == 2 and other.ndim == 2:
+                if self.shape[1] != other.shape[0]:
+                    raise ValueError(
+                        "Shapes are not aligned for matrix multiplication"
+                    )
+                new_tensor = Tensor(
+                    self.shape, dtype, requires_grad=requires_grad
+                )
+                for idx in range(self.shape[0]):
+                    for jdx in range(other.shape[1]):
+                        new_tensor[idx, jdx] = sum(
+                            self[idx, kdx] * other[kdx, jdx]
+                            for kdx in range(self.shape[1])
+                        )
+            elif self.ndim > 2 or other.ndim > 2:
+                raise ValueError(
+                    "Higher-dimensional dot product is not supported"
+                )
+            else:
+                raise ValueError("Invalid shapes for dot product")
+        else:
+            raise TypeError(
+                f"Unsupported operand type(s) for @: {type(self).__name__!r} "
+                f"and {type(other).__name__!r}"
+            )
+
+        def DotBackward0() -> None:
+            """Backpropagation implementation for matrix multiplication.
+
+            Computes gradients for `self` and `other` and propagates
+            them.
+            """
+            if None in (self.grad, other.grad):
+                self.grad = other.grad = Tensor((1,), dtype)
+            self.grad += new_tensor.grad @ other
+            other.grad += self @ new_tensor.grad
+
+        new_tensor.grad_fn = Node(DotBackward0)
+        new_tensor.grad_fn.inputs = (self, other)
         return new_tensor
 
     def __mod__(self, other: Number | Tensor) -> Tensor:
@@ -758,31 +968,31 @@ class Tensor:
         the same shape and dtype as the input.
 
         :param other: The operand for modulo operation. Can be a scalar
-            or an tensor of the same shape.
+            or a tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             modulo operation.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
         if isinstance(other, int):
             new_tensor = Tensor(self.shape, self._dtype)
-            new_tensor[:] = [x % other for x in self._buffer]
+            new_tensor[:] = [x % other for x in self._cdata]
             return new_tensor
         elif isinstance(other, float):
-            new_tensor = Tensor(self.shape, float32)
-            new_tensor[:] = [x % other for x in self._buffer]
+            new_tensor = Tensor(self.shape, float64)
+            new_tensor[:] = [x % other for x in self._cdata]
             return new_tensor
         elif isinstance(other, Tensor):
             dtype = (
-                int32
+                int64
                 if all(
                     map(
                         lambda x: not x.name.startswith(("float", "bool")),
                         (self.dtype, other.dtype),
                     )
                 )
-                else float32
+                else float64
             )
             new_tensor = Tensor(self.shape, dtype)
             if self.shape != other.shape:
@@ -807,45 +1017,63 @@ class Tensor:
         the same shape and dtype as the input.
 
         :param other: The operand for exponentiation. Can be a scalar or
-            an tensor of the same shape.
+            a tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             exponentiation.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
+        new_tensor: Tensor
         if isinstance(other, int):
-            new_tensor = Tensor(self.shape, self._dtype)
-            new_tensor[:] = [x**other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, self._dtype, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x**other for x in self._cdata]
         elif isinstance(other, float):
-            new_tensor = Tensor(self.shape, float32)
-            new_tensor[:] = [x**other for x in self._buffer]
-            return new_tensor
+            new_tensor = Tensor(
+                self.shape, float64, requires_grad=self.requires_grad
+            )
+            new_tensor[:] = [x**other for x in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int32
+                int64
                 if all(
                     map(
                         lambda x: not x.name.startswith(("float", "bool")),
                         (self.dtype, other.dtype),
                     )
                 )
-                else float32
+                else float64
             )
-            new_tensor = Tensor(self.shape, dtype)
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x**y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for **: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+
+        def PowBackward0() -> None:
+            """Backpropagation implementation for exponentiation.
+
+            Computes gradient for `self` and propagate it.
+            """
+            if self.nelement() > 1:
+                raise RuntimeError("grad can be created only for scalars")
+            if None in (self.grad,):
+                self.grad = Tensor((1,), self._dtype)
+            self.grad += (other * self ** (other - 1)) * new_tensor.grad
+
+        new_tensor.grad_fn = Node(PowBackward0)
+        new_tensor.grad_fn.inputs = (self,)
+        return new_tensor
 
     def __rpow__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse exponentiation, delegating to `__pow__`.
@@ -867,13 +1095,13 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             comparison.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x < other for x in self._buffer]
+            new_tensor[:] = [x < other for x in self._cdata]
             return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
@@ -901,13 +1129,13 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             comparison.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x > other for x in self._buffer]
+            new_tensor[:] = [x > other for x in self._cdata]
             return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
@@ -935,13 +1163,13 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             comparison.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x <= other for x in self._buffer]
+            new_tensor[:] = [x <= other for x in self._cdata]
             return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
@@ -969,13 +1197,13 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             comparison.
-        :raises TypeError: If `other` is neither a scalar nor an tensor.
-        :raises ValueError: If `other` is an tensor but its shape
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x >= other for x in self._buffer]
+            new_tensor[:] = [x >= other for x in self._cdata]
             return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
@@ -994,7 +1222,7 @@ class Tensor:
     @property
     def buffer(self) -> t.Any:
         """Return the memory buffer holding the tensor elements."""
-        return self._buffer
+        return self._cdata
 
     @property
     def base(self) -> None | t.Any:
@@ -1021,11 +1249,6 @@ class Tensor:
         """Return True if tensor is a meta tensor else False."""
         return False
 
-    @property
-    def device(self) -> DeviceType:
-        """Return the device and index."""
-        return self._device
-
     def dim(self) -> int:
         """Return the number of dimensions of the tensor."""
         return len(self._shape)
@@ -1034,7 +1257,7 @@ class Tensor:
 
     @property
     def nbytes(self) -> t.Any:
-        """Return number of byte size of an tensor."""
+        """Return number of byte size of a tensor."""
         return self.nelement() * self.itemsize
 
     def element_size(self) -> int:
@@ -1103,7 +1326,7 @@ class Tensor:
             sub_tensor = sub_tensors.pop(0)
             step_size = get_step(sub_tensor)
             if step_size:
-                for dim in self._buffer[
+                for dim in self._cdata[
                     slice(
                         sub_tensor._offset,
                         sub_tensor._offset + sub_tensor.nelement() * step_size,
@@ -1132,7 +1355,7 @@ class Tensor:
             sub_tensor = sub_tensors.pop(0)
             step_size = get_step(sub_tensor)
             if step_size:
-                array_like += self._buffer[
+                array_like += self._cdata[
                     slice(
                         sub_tensor._offset,
                         sub_tensor._offset + sub_tensor.nelement() * step_size,
@@ -1145,7 +1368,7 @@ class Tensor:
         return array_like
 
     def nelement(self) -> int:
-        """Return total number of elements in an tensor."""
+        """Return total number of elements in a tensor."""
         return calc_size(self._shape)
 
     numel = nelement
@@ -1154,7 +1377,7 @@ class Tensor:
         """Returns the size of the tensor."""
         if dim is not None:
             return self._shape[dim]
-        return self._shape
+        return Size(self._shape)
 
     def stride(self) -> tuple[int, ...]:
         """Return the strides for traversing the tensor dimensions."""
@@ -1181,8 +1404,8 @@ class Tensor:
         new_tensor = Tensor(
             self.shape,
             dtype,
-            self._device,
-            self._requires_grad,
+            self.device,
+            self.requires_grad,
         )
         new_tensor[:] = self
         return new_tensor
@@ -1191,13 +1414,13 @@ class Tensor:
 
     def float(self) -> Tensor:
         """Return tensor with floating dtype."""
-        return self.to(float32)
+        return self.to(float64)
 
     float64 = float32 = half = double = float
 
     def int(self) -> Tensor:
         """Return tensor with integer dtype."""
-        return self.to(int32)
+        return self.to(int64)
 
     int64 = int32 = int16 = int8 = long = char = int
 
@@ -1245,8 +1468,8 @@ class Tensor:
             return Tensor(
                 size,
                 self._dtype,
-                self._device,
-                self._requires_grad,
+                self.device,
+                self.requires_grad,
                 buffer=self,
                 offset=offset,
             )
@@ -1254,8 +1477,8 @@ class Tensor:
             return Tensor(
                 self.shape,
                 self._dtype,
-                self._device,
-                self._requires_grad,
+                self.device,
+                self.requires_grad,
                 buffer=self,
                 offset=self._offset,
                 strides=self._strides,
@@ -1301,7 +1524,7 @@ class Tensor:
         """
         comprehensions = 0
         shape = list(self.shape).copy()
-        comprehension = list(self._buffer).copy()
+        comprehension = list(self._cdata).copy()
         skip = self.nelement() // shape[-1]
         while comprehensions < len(self.shape) - 1:
             comprehension = [
@@ -1378,8 +1601,8 @@ class Tensor:
         new_tensor = Tensor(
             (self.nelement(),),
             self._dtype,
-            self._device,
-            self._requires_grad,
+            self.device,
+            self.requires_grad,
         )
         new_tensor[:] = self
         return new_tensor
@@ -1397,12 +1620,12 @@ class Tensor:
         new_tensor = self.__class__.__new__(self.__class__)
         new_tensor._shape = shape
         new_tensor._strides = strides
-        new_tensor._buffer = self._buffer
+        new_tensor._cdata = self._cdata
         new_tensor._dtype = self._dtype
         new_tensor._offset = self._offset
         new_tensor._itemsize = self._itemsize
-        new_tensor._device = self._device
-        new_tensor._requires_grad = self._requires_grad
+        new_tensor.device = self.device
+        new_tensor.requires_grad = self.requires_grad
         return new_tensor
 
     def transpose(self, dim0: builtins.int, dim1: builtins.int) -> Tensor:
@@ -1435,12 +1658,12 @@ class Tensor:
             returning the output, defaults to `True`.
         :return: Tensor with list of unique elements.
         """
-        size = len((unique := set(self._buffer)))
+        size = len((unique := set(self._cdata)))
         new_tensor = Tensor(
             (size,),
             self._dtype,
-            self._device,
-            self._requires_grad,
+            self.device,
+            self.requires_grad,
         )
         new_tensor[:] = tuple(py_sorted(unique) if sorted else unique)
         return new_tensor
@@ -1489,6 +1712,15 @@ class Tensor:
 
     greater_equal = ge
 
+    def neg(self) -> Tensor:
+        """Compute negative of the elements.
+
+        :return: Tensor with negative of the input elements.
+        """
+        return self.__mul__(-1)
+
+    negative = neg
+
     def fill_(self, value: Number) -> Tensor:
         """Fill the entire tensor with a scalar value.
 
@@ -1510,6 +1742,163 @@ class Tensor:
             raise ValueError("Value must be an integer or a float")
         self[:] = value
         return self
+
+    def add(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
+        """Perform element-wise addition of the tensor with a scalar or
+        another tensor, scaled by alpha.
+
+        This method supports addition with scalars (int or float) and
+        other tensors of the same shape. The resulting tensor is of the
+        same shape and dtype as the input.
+
+        :param other: The operand for addition. Can be a scalar or an
+            tensor of the same shape.
+        :param alpha: The multiplier for other, defaults to 1.
+        :return: A new tensor containing the result of the element-wise
+            addition.
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        return self.__add__(alpha * other)
+
+    def sub(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
+        """Perform element-wise subtraction of the tensor with a scalar
+        or another tensor, scaled by alpha.
+
+        This method supports subtraction with scalars (int or float) and
+        other tensors of the same shape. The resulting tensor is of the
+        same shape and dtype as the input.
+
+        :param other: The operand for subtraction. Can be a scalar or an
+            tensor of the same shape.
+        :param alpha: The multiplier for other, defaults to 1.
+        :return: A new tensor containing the result of the element-wise
+            subtraction.
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        return self.__sub__(alpha * other)
+
+    def mul(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
+        """Perform element-wise multiplication of the tensor with a
+        scalar or another tensor, scaled by alpha.
+
+        This method supports multiplication with scalars (int or float)
+        and other tensors of the same shape. The resulting tensor is of
+        the same shape and dtype as the input.
+
+        :param other: The operand for multiplication. Can be a scalar or
+            a tensor of the same shape.
+        :param alpha: The multiplier for other, defaults to 1.
+        :return: A new tensor containing the result of the element-wise
+            multiplication.
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        return self.__mul__(alpha * other)
+
+    def div(
+        self, other: Number | Tensor, *, rounding_mode: None | str = None
+    ) -> t.Any:
+        """Perform element-wise division of the tensor with a scalar or
+        another tensor.
+
+        This method supports division with scalars (int or float) and
+        other tensors of the same shape. The resulting tensor is of the
+        same shape and dtype as the input.
+
+        :param other: The operand for division. Can be a scalar or an
+            tensor of the same shape.
+        :param rounding_mode: Type of rounding to apply to the result,
+            defaults to `None`.
+        :return: A new tensor containing the result of the element-wise
+            division.
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        if rounding_mode is not None:
+            raise RuntimeError("Rounding mode is not supported")
+        return self.__div__(other)
+
+    divide = div
+
+    def matmul(self, other: Tensor) -> Tensor:
+        """Perform matrix multiplication of the tensor with another
+        tensor, scaled by alpha.
+
+        This method supports matrix multiplication with other tensors of
+        the same shape. The resulting tensor is of the same shape and
+        dtype as the input.
+
+        :param other: The operand for matrix multiplication.
+        :return: A new tensor containing the result of the element-wise
+            matrix multiplication.
+        :raises TypeError: If `other` is not a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        return self.__matmul__(other)
+
+    def pow(self, exponent: Number | Tensor) -> Tensor:
+        """Perform element-wise exponentiation of the tensor with a
+        scalar or another tensor.
+
+        This method supports exponentiation with scalars (float) and
+        other tensors of the same shape. The resulting tensor is of the
+        same shape and dtype as the input.
+
+        :param exponent: The operand for exponentiation. Can be a scalar
+            or a tensor of the same shape.
+        :return: A new tensor containing the result of the element-wise
+            exponentiation.
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        return self.__pow__(exponent)
+
+    def backward(
+        self,
+        gradient: None | Tensor = None,
+        inputs: None | tuple[Tensor, ...] = None,
+    ) -> None:
+        """Compute the gradient of current tensor w.r.t graph leaves.
+
+        :param gradient: The gradient of the output with respect to the
+            tensor, defaults to `None`.
+        :param inputs: Tuple of inputs w.r.t which the gradients will
+            be accumulated into `.grad`.
+        :raises RuntimeError: If the tensor does not require gradients.
+        """
+        if not self.requires_grad:
+            raise RuntimeError(
+                "Tensors does not require grad and does not have a grad_fn"
+            )
+        graph: list[tuple[Tensor, ...] | Tensor] = []
+        seen: set[tuple[Tensor, ...] | Tensor] = set()
+        if gradient is None:
+            gradient = Tensor((1,), float64)
+            gradient[:] = 1.0
+        self.grad = gradient
+
+        def iter_graph(inputs: tuple[Tensor, ...] | Tensor) -> None:
+            """Recursive function to traverse the computation graph."""
+            if inputs not in seen:
+                seen.add(inputs)
+                if hasattr(inputs.grad_fn, "inputs"):
+                    for input in inputs.grad_fn.inputs:
+                        iter_graph(input)
+                graph.append(inputs)
+
+        iter_graph(inputs if inputs else self)
+        for node in reversed(graph):
+            if node.grad_fn is not None and callable(node.grad_fn):
+                node.grad_fn()
+        self.grad = None
 
 
 @function_dispatch
@@ -1553,9 +1942,9 @@ def tensor(
     chain_from_iterable(data)
     if dtype is None:
         dtype = (
-            int32
+            int64
             if all(isinstance(idx, int) for idx in array_like)
-            else float32
+            else float64
         )
     new_tensor = Tensor(size, dtype, device, requires_grad)
     new_tensor[:] = array_like
