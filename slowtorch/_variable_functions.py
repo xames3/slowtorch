@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import typing as t
 
 import slowtorch
 from slowtorch import function_dispatch
@@ -510,13 +511,80 @@ def arange(
     if step == 0:
         raise ValueError("Step size must not be zero")
     size = max(0, math.ceil((end - start) / step))
-    dtype = (
-        slowtorch.int64
-        if all(isinstance(idx, int) for idx in (start, end, step))
-        else slowtorch.float64
-    )
+    if dtype is None:
+        dtype = (
+            slowtorch.int64
+            if all(isinstance(idx, int) for idx in (start, end, step))
+            else slowtorch.float64
+        )
     new_tensor = empty(
         (size,), dtype=dtype, device=device, requires_grad=requires_grad
     )
     new_tensor[:] = [start + idx * step for idx in range(size)]
+    return new_tensor
+
+
+@function_dispatch
+def linspace(
+    start: Number,
+    end: Number,
+    steps: int,
+    *,
+    dtype: None | Dtype = None,
+    device: DeviceType = None,
+    requires_grad: bool = False,
+) -> Tensor:
+    """Creates a 1-D tensor of `steps` equally spaced points between
+    `start` and `end` (inclusive).
+
+    :param start: Starting value for the set of points.
+    :param end: Ending value for the set of points`.
+    :param steps: Size of the constructed tensor.
+    :param dtype: The desired data type of the new tensor. If `None`,
+        the data type of `input` is used, defaults to `None`.
+    :param device: Device where the tensor will be created, defaults to
+        `None`.
+    :param requires_grad: Boolean if autograd should record operations
+        on the returned tensor, defaults to `False`.
+    :return: A 1-D tensor of evenly spaced values.
+    :raises ValueError: If `steps` is not a positive integer.
+    """
+    if steps <= 0:
+        raise ValueError("Number of steps must be a positive integer")
+    if dtype is None:
+        dtype = slowtorch.float64
+    new_tensor = empty(
+        (steps,), dtype=dtype, device=device, requires_grad=requires_grad
+    )
+    jump = (end - start) / (steps - 1) if steps > 1 else 0
+    new_tensor[:] = [start + idx * jump for idx in range(steps)]
+    return new_tensor
+
+
+@function_dispatch
+def cat(
+    tensors: t.Sequence[Tensor],
+    dim: int = 0,
+) -> Tensor:
+    """Concatenate the given sequence of tensors in the given dimension.
+
+    The `cat` function creates an tensor with the same size as the input
+    tensors.
+
+    :param tensors: Sequence of tensors of same type.
+    :param dim: Dimension over which the tensors are concatenated,
+        defaults to 0.
+    :return: A new tensor concatenated over the provided dimension.
+    """
+    if not all(map(lambda x: x.shape == tensors[0].shape, tensors)):
+        raise ValueError("Tensors must have same shapes and dimensions")
+    size = list(tensors[0].shape)
+    size[dim] = size[dim] * len(tensors)
+    new_tensor = empty(tuple(size), dtype=tensors[0].dtype)
+    offset = 0
+    for tensor in tensors:
+        slices = [slice(None)] * len(tensor.shape)
+        slices[dim] = slice(offset, offset + tensor.shape[dim])
+        new_tensor[tuple(slices)] = tensor
+        offset += tensor.shape[dim]
     return new_tensor
