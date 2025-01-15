@@ -118,6 +118,25 @@ for dtype in supported_dtypes:
     globals()[dtype] = dtype
 
 
+class PrinterOptions:
+    """Printer options to mimic PyTorch's way."""
+
+    precision: int = 4
+
+
+PRINT_OPTS = PrinterOptions()
+
+
+@function_dispatch
+def set_printoptions(precision: None | int = None) -> None:
+    """Set options for printing."""
+    from slowtorch._tensor import Tensor
+
+    if precision is None:
+        precision = 4
+    Tensor._print_opts.precision = precision
+
+
 class Node:
     """Represent a node in the computational graph for gradient
     computation.
@@ -191,6 +210,7 @@ class Tensor:
         "grad_fn",
         "requires_grad",
     )
+    _print_opts = PRINT_OPTS
 
     def __init__(
         self,
@@ -514,6 +534,7 @@ class Tensor:
                     if not self._dtype.name.startswith(("float", "bool")):
                         converted.append(int(element))
                     else:
+                        element = round(element, self._print_opts.precision)
                         converted.append(element)
                 sub_tensor._cdata[
                     slice(
