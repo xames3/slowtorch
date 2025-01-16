@@ -59,6 +59,8 @@ from __future__ import annotations
 
 import builtins
 import ctypes
+import itertools
+import math
 import typing as t
 from collections.abc import Iterable
 
@@ -74,6 +76,9 @@ from slowtorch._utils import calc_size
 from slowtorch._utils import calc_strides
 from slowtorch._utils import get_step
 from slowtorch._utils import has_uniform_shape
+from slowtorch._utils import normal_exp
+from slowtorch._utils import safe_exp
+from slowtorch._utils import safe_max
 
 __all__: list[str] = [
     "bool",
@@ -293,7 +298,7 @@ class Tensor:
         """Method to mimic PyTorch's tensor as close as possible."""
         if only:
             if not self.requires_grad:
-                return self._cdata[0]
+                return str(self._cdata[0])
         indent = min(2, max(0, (self.ndim - axis - 1)))
         if axis < len(self.shape):
             formatted += "["
@@ -1109,6 +1114,13 @@ class Tensor:
         """
         return self.__pow__(other)
 
+    def __neg__(self) -> Tensor:
+        """Perform negation, delegating to `__mul__`.
+
+        :return: The result of the negation.
+        """
+        return self.__mul__(-1)
+
     def __lt__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise less-than operation of the tensor with a
         scalar or another tensor.
@@ -1256,7 +1268,7 @@ class Tensor:
         return self._base
 
     @property
-    def dtype(self) -> t.Any | str:
+    def dtype(self) -> t.Any:
         """Return the data type of the tensor elements (mainly str)."""
         return self._dtype
 
@@ -1934,6 +1946,267 @@ class Tensor:
         """
         new_tensor = Tensor((1,), self.dtype)
         new_tensor[:] = max(self._flat)
+        return new_tensor
+
+    def exp(self) -> Tensor:
+        """Perform element-wise exponentiation of the tensor.
+
+        This method supports exponentiation. The resulting tensor is of
+        the same shape and dtype as the input. The exponentiation
+        function is defined as::
+
+            exp(x) = math.exp(x)
+
+        :return: A new tensor containing the result of the element-wise
+            exponentiation.
+        """
+        new_tensor = Tensor(
+            self.shape,
+            self.dtype,
+            requires_grad=self.requires_grad,
+        )
+        new_tensor[:] = [math.exp(dim) for dim in self._flat]
+
+        def ExpBackward0() -> None:
+            """Backpropagation implementation for exponentiation.
+
+            Computes gradient for `self` and propagate it. The exp
+            gradient is defined as::
+
+                exp'(x) = math.exp(x)
+            """
+            if self.nelement() > 1:
+                raise RuntimeError("grad can be created only for scalars")
+            if None in (self.grad,):
+                self.grad = Tensor((1,), self._dtype)
+            self.grad += new_tensor.exp() * new_tensor.grad
+
+        new_tensor.grad_fn = Node(ExpBackward0)
+        new_tensor.grad_fn.inputs = (self,)
+        return new_tensor
+
+    def relu(self) -> Tensor:
+        """Apply the Rectified Linear Unit (ReLU) function element-wise.
+
+        ReLU sets all negative values in the tensor to zero and keeps
+        positive values unchanged. This operation is differentiable, and
+        gradients are propagated only for positive elements. The relu
+        function is defined as::
+
+            relu(x) = max(x, 0)
+
+        :return: Output tensor after applying the ReLU function, with
+            gradients linked for backpropagation.
+        """
+        new_tensor = Tensor(
+            self.shape,
+            self.dtype,
+            requires_grad=self.requires_grad,
+        )
+        if len(self.shape) == 1:
+            new_tensor[:] = (
+                safe_max(self[dim]) for dim in range(self.shape[0])
+            )
+        else:
+            N = range(py_max(self.shape))
+            for dim in itertools.product(N, N):
+                try:
+                    new_tensor[dim] = safe_max(self[dim])
+                except IndexError:
+                    continue
+
+        def ReluBackward0() -> None:
+            """Backpropagation implementation for ReLU.
+
+            Computes gradients for `self` and propagates them. The relu
+            gradient is defined as::
+
+                relu'(x) = 1 if x > 0 else 0
+
+            .. seealso::
+
+                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                    activation_functions.html#relu
+            """
+            if self.nelement() > 1:
+                raise RuntimeError("grad can be created only for scalars")
+            if None in (self.grad,):
+                self.grad = Tensor((1,), self.dtype)
+            self.grad += (new_tensor > 0) * new_tensor.grad
+
+        new_tensor.grad_fn = Node(ReluBackward0)
+        new_tensor.grad_fn.inputs = (self,)
+        return new_tensor
+
+    def elu(self, alpha: builtins.float = 1.0) -> Tensor:
+        """Apply the Exponential Linear Unit (ELU) function
+        element-wise.
+
+        ELU is a function that tend to converge cost to zero faster and
+        produce more accurate results. This operation is differentiable,
+        and gradients are propagated only for positive elements. The elu
+        function is defined as::
+
+            elu(x) = x if x >- 0 else alpha * (exp(x) - 1)
+
+        :param alpha: Value for the ELU formulation, defaults to 1.0.
+        :return: Output tensor after applying the ELU function, with
+            gradients linked for backpropagation.
+        """
+        new_tensor = Tensor(
+            self.shape,
+            self.dtype,
+            requires_grad=self.requires_grad,
+        )
+        data: list[t.Any] = []
+        if len(self.shape) == 1:
+            iterator = range(self.shape[0])
+        else:
+            N = range(py_max(self.shape))
+            iterator = itertools.product(N, N)
+        for dim in iterator:
+            try:
+                if self[dim] <= 0:
+                    data.append(alpha * (normal_exp(self[dim]) - 1))
+                else:
+                    data.append(self[dim])
+            except IndexError:
+                continue
+        new_tensor[:] = data
+
+        def EluBackward0() -> None:
+            """Backpropagation implementation for ELU.
+
+            Computes gradients for `self` and propagates them. The elu
+            gradient is defined as::
+
+                elu'(x) = 1 if x > 0 else alpha * exp(x)
+
+            .. seealso::
+
+                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                    activation_functions.html#elu
+            """
+            if self.nelement() > 1:
+                raise RuntimeError("grad can be created only for scalars")
+            if None in (self.grad,):
+                self.grad = Tensor((1,), self.dtype)
+            self.grad += (
+                1.0 if new_tensor > 0 else alpha * normal_exp(new_tensor)
+            ) * new_tensor.grad
+
+        new_tensor.grad_fn = Node(EluBackward0)
+        new_tensor.grad_fn.inputs = (self,)
+        return new_tensor
+
+    def tanh(self) -> Tensor:
+        """Apply the Hyperbolic Tangent (Tanh) function element-wise.
+
+        Tanh squashes all the values between the range of -1 to 1. This
+        operation is differentiable, and gradients are propagated. The
+        tanh function is defined as::
+
+            tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
+
+        :return: Output tensor after applying the Tanh function, with
+            gradients linked for backpropagation.
+        """
+        new_tensor = Tensor(
+            self.shape,
+            self.dtype,
+            requires_grad=self.requires_grad,
+        )
+        if len(self.shape) == 1:
+            new_tensor[:] = [
+                ((x := normal_exp(self[dim])) - (y := safe_exp(-self[dim])))
+                / (x + y)
+                for dim in range(self.shape[0])
+            ]
+        else:
+            N = range(py_max(self.shape))
+            for dim in itertools.product(N, N):
+                try:
+                    new_tensor[dim] = (
+                        (x := normal_exp(self[dim]))
+                        - (y := safe_exp(-self[dim]))
+                    ) / (x + y)
+                except IndexError:
+                    continue
+
+        def TanhBackward0() -> None:
+            """Backpropagation implementation for Tanh.
+
+            Computes gradients for `self` and propagates them. The tanh
+            gradient is defined as::
+
+                tanh'(x) = 1 - tanh(x)**2
+
+            .. seealso::
+
+                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                    activation_functions.html#tanh
+            """
+            if self.nelement() > 1:
+                raise RuntimeError("grad can be created only for scalars")
+            if None in (self.grad,):
+                self.grad = Tensor((1,), self.dtype)
+            self.grad += (1.0 - new_tensor**2) * new_tensor.grad
+
+        new_tensor.grad_fn = Node(TanhBackward0)
+        new_tensor.grad_fn.inputs = (self,)
+        return new_tensor
+
+    def sigmoid(self) -> Tensor:
+        """Apply the Sigmoid function element-wise.
+
+        Sigmoid function squashes between 0 and 1. This operation is
+        differentiable, and gradients are propagated. The sigmoid
+        function is defined as::
+
+            sigmoid(x) = 1 / (1 + exp(-x))
+
+        :return: Output tensor after applying the Sigmoid function, with
+            gradients linked for backpropagation.
+        """
+        new_tensor = Tensor(
+            self.shape,
+            self.dtype,
+            requires_grad=self.requires_grad,
+        )
+        data = []
+        if len(self.shape) == 1:
+            iterator = range(self.shape[0])
+        else:
+            N = range(py_max(self.shape))
+            iterator = itertools.product(N, N)
+        for dim in iterator:
+            try:
+                data.append(1.0 / (1 + safe_exp(self[dim])))
+            except IndexError:
+                continue
+        new_tensor[:] = data
+
+        def SigmoidBackward0() -> None:
+            """Backpropagation implementation for Sigmoid.
+
+            Computes gradients for `self` and propagates them. The
+            sigmoid gradient is defined as::
+
+                sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
+
+            .. seealso::
+
+                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                    activation_functions.html#sigmoid
+            """
+            if self.nelement() > 1:
+                raise RuntimeError("grad can be created only for scalars")
+            if None in (self.grad,):
+                self.grad = Tensor((1,), self.dtype)
+            self.grad -= (new_tensor * (1 - new_tensor)) * new_tensor.grad
+
+        new_tensor.grad_fn = Node(SigmoidBackward0)
+        new_tensor.grad_fn.inputs = (self,)
         return new_tensor
 
 

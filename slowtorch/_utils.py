@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, January 14 2025
+Last updated on: Thursday, January 16 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -296,3 +296,21 @@ def has_uniform_shape(data: Tensor) -> bool:
         all(has_uniform_shape(idx) for idx in data)
         and len(set(len(idx) for idx in data if isinstance(idx, t.Sized))) <= 1
     )
+
+
+@function_dispatch
+def normal_exp(value: float) -> float:
+    """Dummy function to type safe compute exponentiations."""
+    return math.exp(value)
+
+
+@function_dispatch
+def safe_exp(value: float) -> float:
+    """Dummy function to type safe compute negative exponentiations."""
+    return math.exp(-value)
+
+
+@function_dispatch
+def safe_max(arg1: float, arg2: float = 0.0) -> float:
+    """Dummy function to type safe compute maximum values."""
+    return max(arg1, arg2)
