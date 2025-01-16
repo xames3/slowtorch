@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Wednesday, January 15 2025
+Last updated on: Thursday, January 16 2025
 
 Tensor object.
 
@@ -288,8 +288,12 @@ class Tensor:
         offset: int,
         pad: int = 0,
         whitespace: int = 0,
+        only: builtins.bool = False,
     ) -> str:
         """Method to mimic PyTorch's tensor as close as possible."""
+        if only:
+            if not self.requires_grad:
+                return self._cdata[0]
         indent = min(2, max(0, (self.ndim - axis - 1)))
         if axis < len(self.shape):
             formatted += "["
@@ -298,18 +302,18 @@ class Tensor:
                     formatted += ("\n " + " " * pad + " " * axis) * indent
                 current = offset + idx * self._strides[axis] // self._itemsize
                 formatted = self.format_repr(
-                    formatted, axis + 1, current, whitespace=whitespace
+                    formatted, axis + 1, current, pad, whitespace
                 )
                 if idx < self.shape[axis] - 1:
                     formatted += ", "
             formatted += "]"
         else:
-            r = repr(self._cdata[offset])
-            if "." in r and r.endswith(".0"):
-                r = f"{r[:-1]:>{whitespace}}"
+            element = repr(self._cdata[offset])
+            if "." in element and element.endswith(".0"):
+                element = f"{element[:-1]:>{whitespace}}"
             else:
-                r = f"{r:>{whitespace}}"
-            formatted += r
+                element = f"{element:>{whitespace}}"
+            formatted += element
         return formatted
 
     def __repr__(self) -> str:
@@ -317,7 +321,8 @@ class Tensor:
         whitespace = max(
             len(str(self._cdata[idx])) for idx in range(self.nelement())
         )
-        formatted = self.format_repr("", 0, self._offset, 7, whitespace)
+        only = len(self._cdata) == 1
+        formatted = self.format_repr("", 0, self._offset, 7, whitespace, only)
         extra: str = ""
         if self.requires_grad:
             extra = ", requires_grad=True"
@@ -359,7 +364,7 @@ class Tensor:
             key = pre + (slice(None),) * count + post
         for dim in key:
             if axis >= len(self._shape) and dim is not None:
-                raise IndexError("Too many indices for array")
+                raise IndexError("Too many indices for tensor")
             axissize = self._shape[axis] if axis < len(self._shape) else None
             if isinstance(dim, int) and axissize is not None:
                 if not (-axissize <= dim < axissize):
@@ -1920,6 +1925,16 @@ class Tensor:
             if node.grad_fn is not None and callable(node.grad_fn):
                 node.grad_fn()
         self.grad = None
+
+    def max(self) -> Tensor:
+        """Return the maximum value of all elements along a given
+        dimension.
+
+        :return: Return the maximum value as a tensor.
+        """
+        new_tensor = Tensor((1,), self.dtype)
+        new_tensor[:] = max(self._flat)
+        return new_tensor
 
 
 @function_dispatch
