@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Wednesday, January 15 2025
+Last updated on: Thursday, January 16 2025
 
 This module provides essential tensor creation and initialization
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -202,11 +202,11 @@ def randint(
             return new_tensor
         else:
             N = range(max(size))
-        for dim in itertools.product(N, N):
-            try:
-                new_tensor[dim] = generator.internal.randint(low, high - 1)
-            except IndexError:
-                continue
+            for dim in itertools.product(N, N):
+                try:
+                    new_tensor[dim] = generator.internal.randint(low, high - 1)
+                except IndexError:
+                    continue
         return new_tensor
     else:
         raise TypeError(f"Expected a sequence of integers got {size!r}")
