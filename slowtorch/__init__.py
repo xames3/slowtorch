@@ -4,7 +4,7 @@ SlowTorch
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, January 13 2025
+Last updated on: Thursday, January 16 2025
 
 SlowTorch is yet another personal pet-project of mine where I tried and
 implemented the basic and bare-bones functionality of PyTorch just using
@@ -40,6 +40,7 @@ import slowtorch._types as types
 
 __all__: list[str] = [
     "function_dispatch",
+    "nn",
     "random",
     "types",
     "version",
@@ -74,3 +75,4 @@ __all__ += _tensor.__all__
 __all__ += _utils.__all__
 
 import slowtorch._random as random
+import slowtorch.nn as nn
