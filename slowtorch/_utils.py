@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, January 16 2025
+Last updated on: Friday, January 17 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -168,7 +168,7 @@ class Size(tuple[int, ...]):
 
 
 @function_dispatch
-def calc_strides(
+def calculate_strides(
     shape: t.Sequence[int],
     itemsize: int,
 ) -> Size:
@@ -205,7 +205,7 @@ def calc_strides(
 
 
 @function_dispatch
-def calc_size(shape: t.Sequence[int] | int) -> int:
+def calculate_size(shape: t.Sequence[int] | int) -> int:
     """Calculate the total number of elements in a Tensor based on its
     shape.
 
@@ -238,14 +238,14 @@ def get_step(view: Tensor) -> int:
     :return: An integer step size: 1 for C-contiguous Tensors, 0
         otherwise.
     """
-    contiguous = calc_strides(view.shape, view.itemsize)
+    contiguous = calculate_strides(view.shape, view.itemsize)
     step = view._strides[-1] // contiguous[-1]
     strides = tuple(stride * step for stride in contiguous)
     return step if view._strides == strides else 0
 
 
 @function_dispatch
-def calc_shape_from_data(data: t.Any) -> Size:
+def calculate_shape_from_data(data: t.Any) -> Size:
     """Infer the shape of a nested iterable structure and represent it
     as a Tensor.
 
@@ -261,7 +261,7 @@ def calc_shape_from_data(data: t.Any) -> Size:
     """
     shape: list[int] = []
 
-    def _calc_shape(obj: t.Any, axis: int) -> None:
+    def _calculate_shape(obj: t.Any, axis: int) -> None:
         """Helper function to calculate shape recursively."""
         if isinstance(obj, t.Sized) and not isinstance(obj, (str, bytes)):
             if len(shape) <= axis:
@@ -270,9 +270,9 @@ def calc_shape_from_data(data: t.Any) -> Size:
             if length > shape[axis]:
                 shape[axis] = length
             for element in obj:
-                _calc_shape(element, axis + 1)
+                _calculate_shape(element, axis + 1)
 
-    _calc_shape(data, 0)
+    _calculate_shape(data, 0)
     return Size(tuple(shape))
 
 
@@ -314,3 +314,9 @@ def safe_exp(value: float) -> float:
 def safe_max(arg1: float, arg2: float = 0.0) -> float:
     """Dummy function to type safe compute maximum values."""
     return max(arg1, arg2)
+
+
+@function_dispatch
+def safe_round(number: float, ndigits: int = 4) -> float:
+    """Dummy function to type safe round floating values."""
+    return round(number, ndigits)
