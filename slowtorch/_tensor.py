@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, January 16 2025
+Last updated on: Friday, January 17 2025
 
 Tensor object.
 
@@ -71,14 +71,15 @@ from slowtorch._utils import Device
 from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
-from slowtorch._utils import calc_shape_from_data
-from slowtorch._utils import calc_size
-from slowtorch._utils import calc_strides
+from slowtorch._utils import calculate_shape_from_data
+from slowtorch._utils import calculate_size
+from slowtorch._utils import calculate_strides
 from slowtorch._utils import get_step
 from slowtorch._utils import has_uniform_shape
 from slowtorch._utils import normal_exp
 from slowtorch._utils import safe_exp
 from slowtorch._utils import safe_max
+from slowtorch._utils import safe_round
 
 __all__: list[str] = [
     "bool",
@@ -254,7 +255,7 @@ class Tensor:
                 raise ValueError("Offset must be 0 when buffer is None")
             if strides is not None:
                 raise ValueError("Strides must be None when buffer is None")
-            self._strides = calc_strides(self._shape, self._itemsize)
+            self._strides = calculate_strides(self._shape, self._itemsize)
         else:
             if isinstance(buffer, Tensor) and buffer.base is not None:
                 buffer = buffer.base
@@ -264,7 +265,7 @@ class Tensor:
             if self._offset < 0:
                 raise ValueError("Offset must be non-negative")
             if strides is None:
-                strides = calc_strides(self._shape, self._itemsize)
+                strides = calculate_strides(self._shape, self._itemsize)
             elif not (
                 isinstance(strides, tuple)
                 and all(isinstance(stride, int) for stride in strides)
@@ -505,7 +506,7 @@ class Tensor:
         """
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
-            self._cdata[offset] = value
+            self._cdata[offset] = safe_round(value, self._print_opts.precision)
             return
         new_tensor = Tensor(
             shape,
@@ -1314,11 +1315,11 @@ class Tensor:
         """Set a new shape for the tensor."""
         if value == self.shape:
             return
-        if self.nelement() != calc_size(value):
+        if self.nelement() != calculate_size(value):
             raise ValueError("New shape is incompatible with the current size")
         if get_step(self) == 1:
             self._shape = tuple(value)
-            self._strides = calc_strides(self._shape, self.itemsize)
+            self._strides = calculate_strides(self._shape, self.itemsize)
             return
         shape = [dim for dim in self.shape if dim > 1]
         strides = [
@@ -1407,7 +1408,7 @@ class Tensor:
 
     def nelement(self) -> int:
         """Return total number of elements in a tensor."""
-        return calc_size(self._shape)
+        return calculate_size(self._shape)
 
     numel = nelement
 
@@ -2237,7 +2238,7 @@ def tensor(
     """
     if not has_uniform_shape(data):
         raise ValueError("Input data is not uniformly nested")
-    size = calc_shape_from_data(data)
+    size = calculate_shape_from_data(data)
     array_like: list[t.Any] = []
 
     def chain_from_iterable(object: ArrayLike) -> None:
