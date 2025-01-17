@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Thursday, January 16 2025
+Last updated on: Friday, January 17 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -19,21 +19,12 @@ purely functional manner.
 Activation functions are crucial for introducing non-linearity into
 neural networks, enabling them to learn complex patterns in data. The
 functional module includes implementations of popular activation
-functions:
-
-- ``relu``: Applies the Rectified Linear Unit function element-wise,
-    returning zero for all negative inputs and the original value for
-    all non-negative inputs.
-- ``tanh``: Applies the hyperbolic tangent function element-wise,
-    squashing the input values to be within the range (-1, 1).
-
-Loss functions measure the difference between the model outputs and the
-target values, guiding the optimization process.
-
-The modular and functional design of the functional module makes it
-easy to extend with new operations as needed. Users can contribute
-additional functions following the same pattern, enhancing the utility
-and flexibility of the `SlowTorch` package.
+functions. Loss functions measure the difference between the model
+outputs and the target values, guiding the optimization process. The
+modular and functional design of the functional module makes it easy to
+extend with new operations as needed. Users can contribute additional
+functions following the same pattern, enhancing the utility and
+flexibility of the `SlowTorch` package.
 
 The functional module is a versatile and essential part of this package,
 providing users with a wide range of operations for building and
