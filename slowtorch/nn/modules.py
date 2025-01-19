@@ -10,7 +10,7 @@ This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
 enables users to create custom models by leveraging a modular and
 extensible architecture where components like layers and parameters are
-automatically registered and optimized during training. 
+automatically registered and optimized during training.
 
 The `Module` class serves as the base class for all neural network
 components. It automatically registers submodules and learnable
@@ -49,9 +49,12 @@ from collections import OrderedDict
 
 from slowtorch import empty
 from slowtorch._tensor import Tensor
+from slowtorch._utils import DeviceType
+from slowtorch._utils import Dtype
 
 __all__: list[str] = [
     "Flatten",
+    "Linear",
     "Module",
     "Parameter",
 ]
@@ -83,13 +86,14 @@ class Parameter(Tensor):
     ) -> None:
         """Initialize a `Parameter` instance with optional data."""
         if data is None:
-            data = empty((1,), requires_grad=requires_grad)
+            data = empty(1, requires_grad=requires_grad)
         data.requires_grad = requires_grad
-        self._param = self = data
+        for key, value in data.__dict__.items():
+            setattr(self, key, value)
 
     def __repr__(self) -> str:
         """Return a string representation of `Parameter` object."""
-        return f"Parameter containing:\n{self._param}"
+        return "Parameter containing:\n"
 
 
 class Module:
@@ -112,15 +116,7 @@ class Module:
     def __repr__(self) -> str:
         """Return a string representation of the `Module` object."""
         modules = "\n"
-        for key, module in vars(self).items():
-            if key in (
-                "args",
-                "kwargs",
-                "training",
-                "_modules",
-                "_parameters",
-            ):
-                continue
+        for key, module in self._modules.items():
             modules += f"  ({key}): {module}\n"
         return f"{type(self).__name__}({modules})"
 
@@ -136,6 +132,10 @@ class Module:
             self._parameters[name] = value
         super().__setattr__(name, value)
 
+    def __call__(self, input: Tensor) -> Tensor:
+        """Invoke the `forward` method."""
+        return self.forward(input)
+
     def forward(self, input: Tensor) -> Tensor:
         """Define the computation performed at every call.
 
@@ -147,8 +147,6 @@ class Module:
             f"Module: {type(self).__name__} is missing the"
             ' required "forward" function'
         )
-
-    __call__: t.Callable[[Tensor], Tensor] = forward
 
     def children(self) -> t.Iterator[None | Module]:
         """Yield an iterator over immediate child modules."""
@@ -187,7 +185,7 @@ class Module:
                 if set_to_none:
                     param.grad = None
                 else:
-                    param.grad = empty((1,))
+                    param.grad = Tensor((1,))
 
     def train(self, mode: bool = True) -> Module:
         """Set the module and its submodules to training mode.
@@ -218,5 +216,106 @@ class Flatten(Module):
         return f"{type(self).__name__}()"
 
     def forward(self, input: Tensor) -> Tensor:
-        """Compute the forward pass."""
+        """Perform the forward pass of the flatten layer."""
         return input.flatten()
+
+
+class Linear(Module):
+    """Represent a fully connected (linear) layer, a key component in
+    neural networks, which performs a linear transformation on the
+    input data. The mathematical operation is defined as::
+
+        y = x @ w.T + b
+
+    Here::
+
+        - `x` is the input tensor of shape.
+        - `w` is the weight matrix of shape.
+        - `b` is the bias vector of shape.
+
+    This module is often used as the primary building block in neural
+    networks for tasks such as regression, classification, and feature
+    transformation. The weights and biases are trainable parameters, and
+    gradients for these parameters are tracked automatically during
+    backpropagation.
+
+    :param in_features: The number of input features for the layer. This
+        corresponds to the dimensionality of the input tensor.
+    :param out_features: The number of output features for the layer.
+        This determines the dimensionality of the transformed output
+        tensor.
+    :param bias: Whether to include a bias term in the transformation,
+        defaults to `True`.
+    :param device: Specifies the device (e.g., CPU or GPU) on which the
+        parameters will be allocated, defaults to `None`.
+    :param dtype: Specifies the data type for the parameters, defaults
+        to `None`.
+    """
+
+    in_features: int
+    out_features: int
+    weight: Tensor
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        device: DeviceType = None,
+        dtype: None | Dtype = None,
+    ) -> None:
+        """Initialize the `Linear` module with the specified input and
+        output feature sizes, and optionally include a bias term.
+        """
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = Parameter(
+            empty(
+                out_features,
+                in_features,
+                dtype=dtype,
+                device=device,
+            )
+        )
+        if bias:
+            self.bias = Parameter(
+                empty(
+                    out_features,
+                    dtype=dtype,
+                    device=device,
+                )
+            )
+        else:
+            self.bias = None
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Linear` object."""
+        return (
+            f"{type(self).__name__}(in_features={self.in_features}, "
+            f"out_features={self.out_features}, bias={self.bias is not None})"
+        )
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the linear layer.
+
+        The forward pass computes the linear transformation on the
+        input tensor `input` as follows::
+
+            output = input @ weight.T + bias
+
+        :param input: The input tensor to be transformed, with shape.
+        :return: The output tensor resulting from the linear
+            transformation, with shape.
+        :raises ValueError: If the input tensor does not have the
+            expected shape.
+        """
+        if input.shape[-1] != self.in_features:
+            raise ValueError(
+                f"Expected input with {self.in_features} features, but "
+                f"got {input.shape[-1]}"
+            )
+        result = input @ self.weight.t()
+        if self.bias is not None:
+            result += self.bias
+        return result
