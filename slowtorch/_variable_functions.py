@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Thursday, January 16 2025
+Last updated on: Saturday, January 18 2025
 
 This module provides essential tensor creation and initialization
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -72,8 +72,7 @@ from slowtorch._utils import Size
 
 @function_dispatch
 def randn(
-    size: Size | tuple[int, ...] | int,
-    *,
+    *size: int,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
     device: DeviceType = None,
@@ -94,11 +93,12 @@ def randn(
     """
     if generator is None:
         generator = default_generator
-    if isinstance(size, int):
-        new_tensor = Tensor((size,), dtype, device, requires_grad)
-        new_tensor[:] = [generator.internal.gauss(0, 1) for _ in range(size)]
+    if len(size) == 1:
+        shape = size[0]
+        new_tensor = Tensor((shape,), dtype, device, requires_grad)
+        new_tensor[:] = [generator.internal.gauss(0, 1) for _ in range(shape)]
         return new_tensor
-    elif isinstance(size, tuple):
+    elif len(size) > 1:
         new_tensor = Tensor(size, dtype, device, requires_grad)
         N = range(max(size))
         for dim in itertools.product(N, N):
@@ -116,8 +116,7 @@ def randn(
 
 @function_dispatch
 def rand(
-    size: Size | tuple[int, ...] | int,
-    *,
+    *size: int,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
     device: DeviceType = None,
@@ -138,11 +137,14 @@ def rand(
     """
     if generator is None:
         generator = default_generator
-    if isinstance(size, int):
-        new_tensor = Tensor((size,), dtype, device, requires_grad)
-        new_tensor[:] = [generator.internal.uniform(0, 1) for _ in range(size)]
+    if len(size) == 1:
+        shape = size[0]
+        new_tensor = Tensor((shape,), dtype, device, requires_grad)
+        new_tensor[:] = [
+            generator.internal.uniform(0, 1) for _ in range(shape)
+        ]
         return new_tensor
-    elif isinstance(size, tuple):
+    elif len(size) > 1:
         new_tensor = Tensor(size, dtype, device, requires_grad)
         N = range(max(size))
         for dim in itertools.product(N, N):
@@ -163,7 +165,6 @@ def randint(
     low: int = 0,
     high: None | int = None,
     size: None | Size | tuple[int, ...] = None,
-    *,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
     device: DeviceType = None,
@@ -215,7 +216,6 @@ def randint(
 @function_dispatch
 def randperm(
     n: int,
-    *,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
     device: DeviceType = None,
@@ -247,8 +247,7 @@ def randperm(
 
 @function_dispatch
 def empty(
-    size: Size | tuple[int, ...] | int,
-    *,
+    *size: int,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -275,13 +274,30 @@ def empty(
         [1] The contents of the returned tensor are random and should
             not be used without proper initialization.
     """
-    return Tensor(size, dtype, device, requires_grad)
+    if len(size) == 1:
+        shape = size[0]
+        new_tensor = Tensor((shape,), dtype, device, requires_grad)
+        new_tensor[:] = [0.0 for _ in range(shape)]
+        return new_tensor
+    elif len(size) > 1:
+        new_tensor = Tensor(size, dtype, device, requires_grad)
+        N = range(max(size))
+        for dim in itertools.product(N, N):
+            try:
+                new_tensor[dim] = 0.0
+            except IndexError:
+                continue
+        return new_tensor
+    else:
+        raise TypeError(
+            f"Expected a sequence of integers or a single integer, "
+            f"got {size!r}"
+        )
 
 
 @function_dispatch
 def zeros(
-    size: Size | tuple[int, ...] | int,
-    *,
+    *size: int,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -302,13 +318,19 @@ def zeros(
         on the returned tensor, defaults to `False`.
     :return: An initialized tensor with the values set to 0.
     """
-    return empty(size, dtype=dtype, device=device, requires_grad=requires_grad)
+    new_tensor = empty(
+        *size,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
+    new_tensor.fill_(0)
+    return new_tensor
 
 
 @function_dispatch
 def zeros_like(
     input: Tensor,
-    *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -334,13 +356,14 @@ def zeros_like(
     """
     dtype = input.dtype if dtype is None else dtype
     size = input.shape
-    return zeros(size, dtype=dtype, device=device, requires_grad=requires_grad)
+    return zeros(
+        *size, dtype=dtype, device=device, requires_grad=requires_grad
+    )
 
 
 @function_dispatch
 def ones(
-    size: Size | tuple[int, ...] | int,
-    *,
+    *size: int,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -362,7 +385,7 @@ def ones(
     :return: An initialized tensor with the values set to 1.
     """
     new_tensor = empty(
-        size,
+        *size,
         dtype=dtype,
         device=device,
         requires_grad=requires_grad,
@@ -374,7 +397,6 @@ def ones(
 @function_dispatch
 def ones_like(
     input: Tensor,
-    *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -400,14 +422,13 @@ def ones_like(
     """
     dtype = input.dtype if dtype is None else dtype
     size = input.shape
-    return ones(size, dtype=dtype, device=device, requires_grad=requires_grad)
+    return ones(*size, dtype=dtype, device=device, requires_grad=requires_grad)
 
 
 @function_dispatch
 def full(
-    size: Size | tuple[int, ...] | int,
+    *size: int,
     fill_value: Number,
-    *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -430,7 +451,7 @@ def full(
     :return: An initialized tensor with the values set to `fill_value`.
     """
     new_tensor = empty(
-        size,
+        *size,
         dtype=dtype,
         device=device,
         requires_grad=requires_grad,
@@ -443,7 +464,6 @@ def full(
 def full_like(
     input: Tensor,
     fill_value: Number,
-    *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -470,7 +490,7 @@ def full_like(
     dtype = input.dtype if dtype is None else dtype
     size = input.shape
     return full(
-        size,
+        *size,
         fill_value,
         dtype=dtype,
         device=device,
@@ -483,7 +503,6 @@ def arange(
     start: Number = 0,
     end: Number = float("inf"),
     step: Number = 1,
-    *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -518,7 +537,7 @@ def arange(
             else slowtorch.float64
         )
     new_tensor = empty(
-        (size,), dtype=dtype, device=device, requires_grad=requires_grad
+        size, dtype=dtype, device=device, requires_grad=requires_grad
     )
     new_tensor[:] = [start + idx * step for idx in range(size)]
     return new_tensor
@@ -529,7 +548,6 @@ def linspace(
     start: Number,
     end: Number,
     steps: int,
-    *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
     requires_grad: bool = False,
@@ -554,7 +572,7 @@ def linspace(
     if dtype is None:
         dtype = slowtorch.float64
     new_tensor = empty(
-        (steps,), dtype=dtype, device=device, requires_grad=requires_grad
+        steps, dtype=dtype, device=device, requires_grad=requires_grad
     )
     jump = (end - start) / (steps - 1) if steps > 1 else 0
     new_tensor[:] = [start + idx * jump for idx in range(steps)]
@@ -580,7 +598,7 @@ def cat(
         raise ValueError("Tensors must have same shapes and dimensions")
     size = list(tensors[0].shape)
     size[dim] = size[dim] * len(tensors)
-    new_tensor = empty(tuple(size), dtype=tensors[0].dtype)
+    new_tensor = empty(*tuple(size), dtype=tensors[0].dtype)
     offset = 0
     for tensor in tensors:
         slices = [slice(None)] * len(tensor.shape)
