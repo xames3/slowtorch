@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 17 2025
+Last updated on: Saturday, January 18 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -296,6 +296,40 @@ def has_uniform_shape(data: Tensor) -> bool:
         all(has_uniform_shape(idx) for idx in data)
         and len(set(len(idx) for idx in data if isinstance(idx, t.Sized))) <= 1
     )
+
+
+@function_dispatch
+def broadcast_shape(input: Size, other: Size) -> tuple[int, ...]:
+    """Calculate the broadcast-compatible shape for two tensors.
+
+    This function aligns the two shapes from the right, padding the
+    smaller shape with `1`s on the left. Then, it checks compatibility
+    for broadcasting::
+
+        - Each tensor has at least one dimension.
+        - Dimension sizes must either be equal, one of them is 1 or
+          one of them does not exist.
+
+    :param input: Shape of the first tensor.
+    :param other: Shape of the second tensor.
+    :return: The broadcast-compatible shape.
+    :raises ValueError: If the shapes are incompatible for broadcasting.
+    """
+    buffer: list[int] = []
+    r_input = list(reversed(input))
+    r_other = list(reversed(other))
+    maximum = max(len(r_input), len(r_other))
+    r_input.extend([1] * (maximum - len(r_input)))
+    r_other.extend([1] * (maximum - len(r_other)))
+    for idx, jdx in zip(r_input, r_other):
+        if idx == jdx or idx == 1 or jdx == 1:
+            buffer.append(max(idx, jdx))
+        else:
+            raise ValueError(
+                f"Operands couldn't broadcast together with shapes {input} "
+                f"and {other}"
+            )
+    return tuple(reversed(buffer))
 
 
 @function_dispatch
