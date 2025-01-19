@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Friday, January 17 2025
+Last updated on: Saturday, January 18 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -93,7 +93,7 @@ class Parameter(Tensor):
 
     def __repr__(self) -> str:
         """Return a string representation of `Parameter` object."""
-        return "Parameter containing:\n"
+        return f"Parameter containing:\n{super().__repr__()}"
 
 
 class Module:
@@ -315,7 +315,7 @@ class Linear(Module):
                 f"Expected input with {self.in_features} features, but "
                 f"got {input.shape[-1]}"
             )
-        result = input @ self.weight.t()
+        result = input @ self.weight.T
         if self.bias is not None:
             result += self.bias
         return result
