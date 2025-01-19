@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Saturday, January 18 2025
+Last updated on: Sunday, January 19 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -354,3 +354,13 @@ def safe_max(arg1: float, arg2: float = 0.0) -> float:
 def safe_round(number: float, ndigits: int = 4) -> float:
     """Dummy function to type safe round floating values."""
     return round(number, ndigits)
+
+
+@function_dispatch
+def safe_range(args: t.Any) -> range:
+    """Dummy function to type safe the range iterator."""
+    if len(args) == 0:
+        return range(0)
+    elif len(args) == 1:
+        return range(args[0])
+    return range(args)
