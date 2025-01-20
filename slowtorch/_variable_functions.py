@@ -277,14 +277,16 @@ def empty(
     if len(size) == 1:
         shape = size[0]
         new_tensor = Tensor((shape,), dtype, device, requires_grad)
-        new_tensor[:] = [0.0 for _ in range(shape)]
+        new_tensor[:] = [
+            default_generator.internal.uniform(-1.0, 1.0) for _ in range(shape)
+        ]
         return new_tensor
     elif len(size) > 1:
         new_tensor = Tensor(size, dtype, device, requires_grad)
         N = range(max(size))
         for dim in itertools.product(N, N):
             try:
-                new_tensor[dim] = 0.0
+                new_tensor[dim] = default_generator.internal.uniform(-1.0, 1.0)
             except IndexError:
                 continue
         return new_tensor
@@ -324,7 +326,7 @@ def zeros(
         device=device,
         requires_grad=requires_grad,
     )
-    new_tensor.fill_(0)
+    new_tensor.fill_(0.0)
     return new_tensor
 
 
@@ -390,7 +392,7 @@ def ones(
         device=device,
         requires_grad=requires_grad,
     )
-    new_tensor.fill_(1)
+    new_tensor.fill_(1.0)
     return new_tensor
 
 
