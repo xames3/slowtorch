@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, January 20 2025
+Last updated on: Tuesday, January 21 2025
 
 Tensor object.
 
@@ -62,6 +62,7 @@ import ctypes
 import typing as t
 from collections.abc import Iterable
 
+import slowtorch
 from slowtorch import function_dispatch
 from slowtorch._types import ArrayLike
 from slowtorch._types import Number
@@ -1667,7 +1668,22 @@ class Tensor:
         dims = tuple(reversed(sorted((dim0, dim1))))
         shape = tuple(self._shape[dim] for dim in dims)
         strides = tuple(self._strides[dim] for dim in dims)
-        return self.view_(shape, strides)
+        new_tensor = self.view_(tuple(shape), tuple(strides))
+
+        def PermuteBackward0() -> None:
+            """Backpropagation implementation for transpose.
+
+            Computes gradients for `input` tensor and propagates them.
+            This is achieved by reversing the transpose operation during
+            the backward pass by swapping the same dimensions (dim0,
+            dim1) in the gradient tensor.
+            """
+            if new_tensor.grad is not None:
+                self.grad = new_tensor.grad.transpose(dim0, dim1)
+
+        new_tensor.grad_fn = Node(PermuteBackward0)
+        new_tensor.grad_fn.inputs = (self, dim0, dim1)
+        return new_tensor
 
     def t(self) -> Tensor:
         """Transpose dimensions 0 and 1."""
@@ -1961,6 +1977,80 @@ class Tensor:
         new_tensor = Tensor((1,), self.dtype)
         new_tensor[:] = max(self._flat)
         return new_tensor
+
+    def exp(self) -> Tensor:
+        """Perform element-wise exponentiation of the tensor.
+
+        This method supports exponentiation. The resulting tensor is of
+        the same shape and dtype as the input. The exponentiation
+        function is defined as::
+
+            exp(x) = math.exp(x)
+
+        :return: A new tensor containing the result of the element-wise
+            exponentiation.
+        """
+        return slowtorch.nn.functional.exp(self)
+
+    def relu(self) -> Tensor:
+        """Apply the Rectified Linear Unit (ReLU) function element-wise.
+
+        ReLU sets all negative values in the tensor to zero and keeps
+        positive values unchanged. This operation is differentiable, and
+        gradients are propagated only for positive elements. The relu
+        function is defined as::
+
+            relu(x) = max(x, 0)
+
+        :return: Output tensor after applying the ReLU function, with
+            gradients linked for backpropagation.
+        """
+        return slowtorch.nn.functional.relu(self)
+
+    def elu(input: Tensor, alpha: builtins.float = 1.0) -> Tensor:
+        """Apply the Exponential Linear Unit (ELU) function element-
+        wise.
+
+        ELU is a function that tend to converge cost to zero faster and
+        produce more accurate results. This operation is differentiable,
+        and gradients are propagated only for positive elements. The elu
+        function is defined as::
+
+            elu(x) = x if x >- 0 else alpha * (exp(x) - 1)
+
+        :param alpha: Value for the ELU formulation, defaults to 1.0.
+        :return: Output tensor after applying the ELU function, with
+            gradients linked for backpropagation.
+        """
+        return slowtorch.nn.functional.elu(input, alpha)
+
+    def tanh(self) -> Tensor:
+        """Apply the Hyperbolic Tangent (Tanh) function element-wise.
+
+        Tanh squashes all the values between the range of -1 to 1. This
+        operation is differentiable, and gradients are propagated. The
+        tanh function is defined as::
+
+            tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
+
+        :return: Output tensor after applying the Tanh function, with
+            gradients linked for backpropagation.
+        """
+        return slowtorch.nn.functional.tanh(self)
+
+    def sigmoid(self) -> Tensor:
+        """Apply the Sigmoid function element-wise.
+
+        Sigmoid function squashes between 0 and 1. This operation is
+        differentiable, and gradients are propagated. The sigmoid function
+        is defined as::
+
+            sigmoid(x) = 1 / (1 + exp(-x))
+
+        :return: Output tensor after applying the Sigmoid function, with
+            gradients linked for backpropagation.
+        """
+        return slowtorch.nn.functional.sigmoid(self)
 
 
 @function_dispatch
