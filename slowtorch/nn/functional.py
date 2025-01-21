@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Friday, January 17 2025
+Last updated on: Tuesday, January 21 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -36,24 +36,107 @@ the field of deep learning.
 
 from __future__ import annotations
 
+import itertools
+import math
+import typing as t
+
+from slowtorch._tensor import Node
 from slowtorch._tensor import Tensor
+from slowtorch._utils import normal_exp
+from slowtorch._utils import safe_exp
+from slowtorch._utils import safe_max
+
+
+def exp(input: Tensor) -> Tensor:
+    """Perform element-wise exponentiation of the tensor.
+
+    This method supports exponentiation. The resulting tensor is of the
+    same shape and dtype as the input. The exponentiation function is
+    defined as::
+
+        exp(x) = math.exp(x)
+
+    :param input: Input tensor to which exponentiation is to be applied.
+    :return: A new tensor containing the result of the element-wise
+        exponentiation.
+    """
+    new_tensor = Tensor(
+        input.shape,
+        input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    new_tensor[:] = [math.exp(dim) for dim in input._flat]
+
+    def ExpBackward0() -> None:
+        """Backpropagation implementation for exponentiation.
+
+        Computes gradient for `input` tensor and propagate it. The exp
+        gradient is defined as::
+
+            exp'(x) = math.exp(x)
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor((1,), input.dtype)
+        input.grad += new_tensor.exp() * new_tensor.grad
+
+    new_tensor.grad_fn = Node(ExpBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
 
 
 def relu(input: Tensor) -> Tensor:
-    """Apply the rectified linear unit (ReLU) function element-wise.
+    """Apply the Rectified Linear Unit (ReLU) function element-wise.
 
-    ReLU sets all negative values in the input tensor to zero and keeps
+    ReLU sets all negative values in the tensor to zero and keeps
     positive values unchanged. This operation is differentiable, and
     gradients are propagated only for positive elements. The relu
     function is defined as::
 
         relu(x) = max(x, 0)
 
-    :param input: Input tensor for which ReLU is to be applied.
+    :param input: Input tensor to which ReLU is to be applied.
     :return: Output tensor after applying the ReLU function, with
         gradients linked for backpropagation.
     """
-    return input.relu()
+    new_tensor = Tensor(
+        input.shape,
+        input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    if len(input.shape) == 1:
+        new_tensor[:] = (safe_max(input[dim]) for dim in range(input.shape[0]))
+    else:
+        N = range(max(input.shape))
+        for dim in itertools.product(N, N):
+            try:
+                new_tensor[dim] = safe_max(input[dim])
+            except IndexError:
+                continue
+
+    def ReluBackward0() -> None:
+        """Backpropagation implementation for ReLU.
+
+        Computes gradients for `input` tensor and propagates them. The
+        relu gradient is defined as::
+
+            relu'(x) = 1 if x > 0 else 0
+
+        .. seealso::
+
+            [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                activation_functions.html#relu
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor((1,), input.dtype)
+        input.grad += (new_tensor > 0) * new_tensor.grad
+
+    new_tensor.grad_fn = Node(ReluBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
 
 
 def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
@@ -61,18 +144,62 @@ def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
     element-wise.
 
     ELU is a function that tend to converge cost to zero faster and
-    produce more accurate results. This operation is differentiable, and
-    gradients are propagated only for positive elements. The elu
+    produce more accurate results. This operation is differentiable,
+    and gradients are propagated only for positive elements. The elu
     function is defined as::
 
         elu(x) = x if x >- 0 else alpha * (exp(x) - 1)
 
-    :param input: Input tensor for which Tanh is to be applied.
+    :param input: Input tensor to which ELU is to be applied.
     :param alpha: Value for the ELU formulation, defaults to 1.0.
     :return: Output tensor after applying the ELU function, with
         gradients linked for backpropagation.
     """
-    return input.elu(alpha)
+    new_tensor = Tensor(
+        input.shape,
+        input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    data: list[t.Any] = []
+    if len(input.shape) == 1:
+        iterator = range(input.shape[0])
+    else:
+        N = range(max(input.shape))
+        iterator = itertools.product(N, N)
+    for dim in iterator:
+        try:
+            if input[dim] <= 0:
+                data.append(alpha * (normal_exp(input[dim]) - 1))
+            else:
+                data.append(input[dim])
+        except IndexError:
+            continue
+    new_tensor[:] = data
+
+    def EluBackward0() -> None:
+        """Backpropagation implementation for ELU.
+
+        Computes gradients for `input` tensor and propagates them. The
+        elu gradient is defined as::
+
+            elu'(x) = 1 if x > 0 else alpha * exp(x)
+
+        .. seealso::
+
+            [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                activation_functions.html#elu
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor((1,), input.dtype)
+        input.grad += (
+            1.0 if new_tensor > 0 else alpha * normal_exp(new_tensor)
+        ) * new_tensor.grad
+
+    new_tensor.grad_fn = Node(EluBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
 
 
 def tanh(input: Tensor) -> Tensor:
@@ -84,11 +211,54 @@ def tanh(input: Tensor) -> Tensor:
 
         tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
 
-    :param input: Input tensor for which Tanh is to be applied.
+    :param input: Input tensor to which Tanh is to be applied.
     :return: Output tensor after applying the Tanh function, with
         gradients linked for backpropagation.
     """
-    return input.tanh()
+    new_tensor = Tensor(
+        input.shape,
+        input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    if len(input.shape) == 1:
+        new_tensor[:] = [
+            ((x := normal_exp(input[dim])) - (y := safe_exp(-input[dim])))
+            / (x + y)
+            for dim in range(input.shape[0])
+        ]
+    else:
+        N = range(max(input.shape))
+        for dim in itertools.product(N, N):
+            try:
+                new_tensor[dim] = (
+                    (x := normal_exp(input[dim]))
+                    - (y := safe_exp(-input[dim]))
+                ) / (x + y)
+            except IndexError:
+                continue
+
+    def TanhBackward0() -> None:
+        """Backpropagation implementation for Tanh.
+
+        Computes gradients for `input` tensor and propagates them. The
+        tanh gradient is defined as::
+
+            tanh'(x) = 1 - tanh(x)**2
+
+        .. seealso::
+
+            [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                activation_functions.html#tanh
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor((1,), input.dtype)
+        input.grad += (1.0 - new_tensor**2) * new_tensor.grad
+
+    new_tensor.grad_fn = Node(TanhBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
 
 
 def sigmoid(input: Tensor) -> Tensor:
@@ -100,8 +270,47 @@ def sigmoid(input: Tensor) -> Tensor:
 
         sigmoid(x) = 1 / (1 + exp(-x))
 
-    :param input: Input tensor for which Sigmoid is to be applied.
+    :param input: Input tensor to which Sigmoid is to be applied.
     :return: Output tensor after applying the Sigmoid function, with
         gradients linked for backpropagation.
     """
-    return input.sigmoid()
+    new_tensor = Tensor(
+        input.shape,
+        input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    data = []
+    if len(input.shape) == 1:
+        iterator = range(input.shape[0])
+    else:
+        N = range(max(input.shape))
+        iterator = itertools.product(N, N)
+    for dim in iterator:
+        try:
+            data.append(1.0 / (1 + safe_exp(input[dim])))
+        except IndexError:
+            continue
+    new_tensor[:] = data
+
+    def SigmoidBackward0() -> None:
+        """Backpropagation implementation for Sigmoid.
+
+        Computes gradients for `input` tensor and propagates them. The
+        sigmoid gradient is defined as::
+
+            sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
+
+        .. seealso::
+
+            [1] https://ml-cheatsheet.readthedocs.io/en/latest/
+                activation_functions.html#sigmoid
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor((1,), input.dtype)
+        input.grad -= (new_tensor * (1 - new_tensor)) * new_tensor.grad
+
+    new_tensor.grad_fn = Node(SigmoidBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
