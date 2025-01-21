@@ -314,3 +314,53 @@ def sigmoid(input: Tensor) -> Tensor:
     new_tensor.grad_fn = Node(SigmoidBackward0)
     new_tensor.grad_fn.inputs = (input,)
     return new_tensor
+
+
+def linear(
+    input: Tensor, weight: Tensor, bias: None | Tensor = None
+) -> Tensor:
+    """Compute the linear transformation on the input tensor `input` as
+    follows::
+
+        output = input @ weight.T + bias
+
+    This function performs a matrix multiplication of the `input` tensor
+    and the transpose of the `weight` tensor, followed by adding the
+    optional `bias` tensor, if provided. This is the standard operation
+    for a dense layer in neural networks.
+
+    :param input: The input tensor to be transformed.
+    :param weight: The weights tensor to be transposed and matrix
+        multiplied.
+    :param bias: Optional bias tensor to add, defaults to `None`.
+    :return: The output tensor resulting from the linear transformation.
+    :raises ValueError: If `bias` is provided and its shape is
+        incompatible with the output shape.
+    """
+    new_tensor = input @ weight.T
+    if bias is not None:
+        if bias.shape != (new_tensor.shape[-1],):
+            raise ValueError(
+                f"Bias {bias.shape} is incompatible with output shape "
+                f"{new_tensor.shape}"
+            )
+        new_tensor += bias
+
+    def AddmmBackward0() -> None:
+        """Backpropagation implementation for Linear transformation.
+
+        Computes gradients for the `input`, `weight`, and `bias` tensors
+        and propagates them backward through the computational graph.
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad, weight.grad, bias.grad):
+            input.grad = weight.grad = bias.grad = Tensor((1,), input.dtype)
+        input.grad += new_tensor.grad @ weight
+        weight.grad += new_tensor.grad.T @ input
+        if bias is not None:
+            bias.grad += new_tensor.grad
+
+    new_tensor.grad_fn = Node(AddmmBackward0)
+    new_tensor.grad_fn.inputs = (input, weight, bias)
+    return new_tensor
