@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Saturday, January 18 2025
+Last updated on: Tuesday, January 21 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -47,6 +47,7 @@ from __future__ import annotations
 import typing as t
 from collections import OrderedDict
 
+import slowtorch
 from slowtorch import empty
 from slowtorch._tensor import Tensor
 from slowtorch._utils import DeviceType
@@ -315,7 +316,4 @@ class Linear(Module):
                 f"Expected input with {self.in_features} features, but "
                 f"got {input.shape[-1]}"
             )
-        result = input @ self.weight.T
-        if self.bias is not None:
-            result += self.bias
-        return result
+        return slowtorch.nn.functional.linear(input, self.weight, self.bias)
