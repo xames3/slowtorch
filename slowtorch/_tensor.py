@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 17 2025
+Last updated on: Monday, January 20 2025
 
 Tensor object.
 
@@ -59,8 +59,6 @@ from __future__ import annotations
 
 import builtins
 import ctypes
-import itertools
-import math
 import typing as t
 from collections.abc import Iterable
 
@@ -71,14 +69,13 @@ from slowtorch._utils import Device
 from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
+from slowtorch._utils import broadcast_shape
 from slowtorch._utils import calculate_shape_from_data
 from slowtorch._utils import calculate_size
 from slowtorch._utils import calculate_strides
 from slowtorch._utils import get_step
 from slowtorch._utils import has_uniform_shape
-from slowtorch._utils import normal_exp
-from slowtorch._utils import safe_exp
-from slowtorch._utils import safe_max
+from slowtorch._utils import safe_range
 from slowtorch._utils import safe_round
 
 __all__: list[str] = [
@@ -202,20 +199,6 @@ class Tensor:
     """
 
     __module__: str = "slowtorch"
-    __slots__: tuple[str, ...] = (
-        "_base",
-        "_cdata",
-        "_dtype",
-        "_itemsize",
-        "_offset",
-        "_shape",
-        "_strides",
-        "data",
-        "device",
-        "grad",
-        "grad_fn",
-        "requires_grad",
-    )
     _print_opts = PRINT_OPTS
 
     def __init__(
@@ -283,9 +266,9 @@ class Tensor:
             self._cdata = Buffer.from_address(ctypes.addressof(buffer))
         else:
             self._cdata = Buffer.from_buffer(buffer)
-        self.grad: Tensor = None
-        self.grad_fn: Node = Node()
         self.data = self
+        self.grad_fn: Node = Node()
+        self.grad: Tensor = None
 
     def format_repr(
         self,
@@ -332,8 +315,11 @@ class Tensor:
         extra: str = ""
         if self.requires_grad:
             extra = ", requires_grad=True"
-            if self.grad_fn.name:
-                extra = f", grad_fn=<{self.grad_fn.name}>"
+            try:
+                if self.grad_fn.name:
+                    extra = f", grad_fn=<{self.grad_fn.name}>"
+            except AttributeError:
+                pass
         if self.dtype not in (float64, int64, bool):
             return f"tensor({formatted}, dtype={self.dtype}{extra})"
         else:
@@ -470,7 +456,7 @@ class Tensor:
             return self._cdata[offset]
         return Tensor(
             shape,
-            self._dtype,
+            self.dtype,
             self.device,
             self.requires_grad,
             buffer=self,
@@ -510,7 +496,7 @@ class Tensor:
             return
         new_tensor = Tensor(
             shape,
-            self._dtype,
+            self.dtype,
             self.device,
             self.requires_grad,
             buffer=self,
@@ -525,7 +511,7 @@ class Tensor:
             if not isinstance(value, Tensor):
                 value = Tensor(  # type: ignore
                     value,
-                    self._dtype,
+                    self.dtype,
                     self.device,
                     self.requires_grad,
                 )
@@ -542,7 +528,7 @@ class Tensor:
                 block = array_like[idx : idx + sub_tensor.nelement()]
                 converted: list[Number] = []
                 for element in block:
-                    if not self._dtype.name.startswith(("float", "bool")):
+                    if not self.dtype.name.startswith(("float", "bool")):
                         converted.append(int(element))
                     else:
                         element = round(element, self._print_opts.precision)
@@ -559,6 +545,20 @@ class Tensor:
                 for dim in range(sub_tensor.shape[0]):
                     sub_tensors.append(sub_tensor[dim])
         assert idx == len(array_like)
+
+    def broadcast_to(self, size: Size | tuple[int, ...]) -> Tensor:
+        """Broadcast the tensor to the target shape."""
+        if self.shape == size:
+            return self
+        if len(size) < len(self.shape):
+            raise ValueError(f"Cannot broadcast {self.shape} to {size}")
+        data = self._cdata[:]
+        for idx in range(len(size)):
+            if idx >= len(self.shape) or self.shape[idx] == 1:
+                data = data * size[idx]
+        new_tensor = Tensor(size, self.dtype, requires_grad=self.requires_grad)
+        new_tensor._cdata = data
+        return new_tensor
 
     def __add__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise addition of the tensor with a scalar or
@@ -577,34 +577,29 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor: Tensor
-        if isinstance(other, int):
-            new_tensor = Tensor(
-                self.shape, self._dtype, requires_grad=self.requires_grad
+        if isinstance(other, Number):
+            dtype = (
+                float64
+                if isinstance(other, float)
+                or self.dtype.name.startswith("float")
+                else int64
             )
-            new_tensor[:] = [x + other for x in self._cdata]
-        elif isinstance(other, float):
             new_tensor = Tensor(
-                self.shape, float64, requires_grad=self.requires_grad
+                self.shape, dtype, requires_grad=self.requires_grad
             )
-            new_tensor[:] = [x + other for x in self._cdata]
+            new_tensor[:] = [data + other for data in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int64
-                if all(
-                    map(
-                        lambda x: not x.name.startswith(("float", "bool")),
-                        (self.dtype, other.dtype),
-                    )
-                )
-                else float64
+                float64
+                if self.dtype.name.startswith("float")
+                or other.dtype.name.startswith("float")
+                else int64
             )
+            shape = broadcast_shape(self.shape, other.shape)
+            self = self.broadcast_to(shape)
+            other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
+            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = [x + y for x, y in zip(self._flat, other._flat)]
         else:
             raise TypeError(
@@ -652,34 +647,29 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor: Tensor
-        if isinstance(other, int):
-            new_tensor = Tensor(
-                self.shape, self._dtype, requires_grad=self.requires_grad
+        if isinstance(other, Number):
+            dtype = (
+                float64
+                if isinstance(other, float)
+                or self.dtype.name.startswith("float")
+                else int64
             )
-            new_tensor[:] = [x - other for x in self._cdata]
-        elif isinstance(other, float):
             new_tensor = Tensor(
-                self.shape, float64, requires_grad=self.requires_grad
+                self.shape, dtype, requires_grad=self.requires_grad
             )
-            new_tensor[:] = [x - other for x in self._cdata]
+            new_tensor[:] = [data - other for data in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int64
-                if all(
-                    map(
-                        lambda x: not x.name.startswith(("float", "bool")),
-                        (self.dtype, other.dtype),
-                    )
-                )
-                else float64
+                float64
+                if self.dtype.name.startswith("float")
+                or other.dtype.name.startswith("float")
+                else int64
             )
+            shape = broadcast_shape(self.shape, other.shape)
+            self = self.broadcast_to(shape)
+            other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
+            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = [x - y for x, y in zip(self._flat, other._flat)]
         else:
             raise TypeError(
@@ -727,34 +717,29 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor: Tensor
-        if isinstance(other, int):
-            new_tensor = Tensor(
-                self.shape, self._dtype, requires_grad=self.requires_grad
+        if isinstance(other, Number):
+            dtype = (
+                float64
+                if isinstance(other, float)
+                or self.dtype.name.startswith("float")
+                else int64
             )
-            new_tensor[:] = [x * other for x in self._cdata]
-        elif isinstance(other, float):
             new_tensor = Tensor(
-                self.shape, float64, requires_grad=self.requires_grad
+                self.shape, dtype, requires_grad=self.requires_grad
             )
-            new_tensor[:] = [x * other for x in self._cdata]
+            new_tensor[:] = [data * other for data in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int64
-                if all(
-                    map(
-                        lambda x: not x.name.startswith(("float", "bool")),
-                        (self.dtype, other.dtype),
-                    )
-                )
-                else float64
+                float64
+                if self.dtype.name.startswith("float")
+                or other.dtype.name.startswith("float")
+                else int64
             )
+            shape = broadcast_shape(self.shape, other.shape)
+            self = self.broadcast_to(shape)
+            other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
+            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = [x * y for x, y in zip(self._flat, other._flat)]
         else:
             raise TypeError(
@@ -804,29 +789,27 @@ class Tensor:
         new_tensor: Tensor
         if isinstance(other, Number):
             data = []
-            for idx in self._data:
+            for idx in self._cdata:
                 try:
                     data.append(idx / other)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
             new_tensor = Tensor(
-                self.shape, self._dtype, requires_grad=self.requires_grad
+                self.shape, self.dtype, requires_grad=self.requires_grad
             )
             new_tensor[:] = data
         elif isinstance(other, Tensor):
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
+            shape = broadcast_shape(self.shape, other.shape)
+            self = self.broadcast_to(shape)
+            other = other.broadcast_to(shape)
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(shape, self.dtype, requires_grad=requires_grad)
             data = []
             for x, y in zip(self._flat, other._flat):
                 try:
                     data.append(x / y)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = data
         else:
             raise TypeError(
@@ -868,29 +851,27 @@ class Tensor:
         new_tensor: Tensor
         if isinstance(other, Number):
             data = []
-            for idx in self._data:
+            for idx in self._cdata:
                 try:
                     data.append(idx // other)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
             new_tensor = Tensor(
-                self.shape, self._dtype, requires_grad=self.requires_grad
+                self.shape, self.dtype, requires_grad=self.requires_grad
             )
             new_tensor[:] = data
         elif isinstance(other, Tensor):
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
+            shape = broadcast_shape(self.shape, other.shape)
+            self = self.broadcast_to(shape)
+            other = other.broadcast_to(shape)
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(shape, self.dtype, requires_grad=requires_grad)
             data = []
             for x, y in zip(self._flat, other._flat):
                 try:
                     data.append(x // y)
                 except ZeroDivisionError:
                     data.append(builtins.float("inf"))
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = data
         else:
             raise TypeError(
@@ -928,53 +909,61 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape doesn't
             match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Tensor):
-            dtype = (
-                int64
-                if all(
-                    map(
-                        lambda x: not x.name.startswith(("float", "bool")),
-                        (self.dtype, other.dtype),
-                    )
-                )
-                else float64
-            )
-            requires_grad = self.requires_grad or other.requires_grad
-            if self.ndim == 1 and other.ndim == 1:
-                if self.shape[0] != other.shape[0]:
-                    raise ValueError(
-                        "Shapes of 1D tensors must be the same for dot product"
-                    )
-                new_tensor = Tensor((1,), dtype, requires_grad=requires_grad)
-                new_tensor[:] = sum(
-                    self[idx] * other[idx] for idx in range(self.shape[0])
-                )
-            elif self.ndim == 2 and other.ndim == 2:
-                if self.shape[1] != other.shape[0]:
-                    raise ValueError(
-                        "Shapes are not aligned for matrix multiplication"
-                    )
-                new_tensor = Tensor(
-                    self.shape, dtype, requires_grad=requires_grad
-                )
-                for idx in range(self.shape[0]):
-                    for jdx in range(other.shape[1]):
-                        new_tensor[idx, jdx] = sum(
-                            self[idx, kdx] * other[kdx, jdx]
-                            for kdx in range(self.shape[1])
-                        )
-            elif self.ndim > 2 or other.ndim > 2:
-                raise ValueError(
-                    "Higher-dimensional dot product is not supported"
-                )
-            else:
-                raise ValueError("Invalid shapes for dot product")
-        else:
+        if not isinstance(other, Tensor):
             raise TypeError(
                 f"Unsupported operand type(s) for @: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+        dtype = (
+            float64
+            if self.dtype.name.startswith("float")
+            or other.dtype.name.startswith("float")
+            else int64
+        )
+        requires_grad = self.requires_grad or other.requires_grad
+        if self.ndim == 1 and other.ndim == 1:
+            if self.shape[0] != other.shape[0]:
+                raise ValueError(
+                    "Shapes of 1D tensors must be the same for dot product"
+                )
+            new_tensor = Tensor((1,), dtype, requires_grad=requires_grad)
+            new_tensor[:] = sum(
+                self[idx] * other[idx] for idx in range(self.shape[0])
+            )
+        elif self.ndim == 2 or other.ndim == 2:
+            if self.shape[1] != other.shape[0]:
+                raise ValueError(
+                    "Shapes are not aligned for matrix multiplication"
+                )
+            new_tensor = Tensor(
+                (self.shape[0], other.shape[1]),
+                dtype,
+                requires_grad=requires_grad,
+            )
+            for idx in range(new_tensor.shape[0]):
+                for jdx in range(new_tensor.shape[1]):
+                    new_tensor[idx, jdx] = sum(
+                        self[idx, kdx] * other[kdx, jdx]
+                        for kdx in range(self.shape[1])
+                    )
+        elif self.ndim > 2 or other.ndim > 2:
+            shape = broadcast_shape(self.shape[:-2], other.shape[:-2]) + (
+                self.shape[-2],
+                other.shape[-1],
+            )
+            self = self.broadcast_to(shape[:-2] + self.shape[-2:])
+            other = other.broadcast_to(shape[:-2] + self.shape[-2:])
+            requires_grad = self.requires_grad or other.requires_grad
+            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+            for batch in safe_range(new_tensor.shape[:-2]):
+                for idx in range(new_tensor.shape[-2]):
+                    for jdx in range(new_tensor.shape[-1]):
+                        new_tensor[batch, idx, jdx] = sum(
+                            self[batch, idx, kdx] * other[batch, kdx, jdx]
+                            for kdx in range(self.shape[-1])
+                        )
+        else:
+            raise ValueError("Invalid shapes for dot product")
 
         def DotBackward0() -> None:
             """Backpropagation implementation for matrix multiplication.
@@ -1008,7 +997,7 @@ class Tensor:
             doesn't match `self.shape`.
         """
         if isinstance(other, int):
-            new_tensor = Tensor(self.shape, self._dtype)
+            new_tensor = Tensor(self.shape, self.dtype)
             new_tensor[:] = [x % other for x in self._cdata]
             return new_tensor
         elif isinstance(other, float):
@@ -1057,34 +1046,28 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor: Tensor
-        if isinstance(other, int):
-            new_tensor = Tensor(
-                self.shape, self._dtype, requires_grad=self.requires_grad
+        if isinstance(other, Number):
+            dtype = (
+                float64
+                if isinstance(other, float) or isinstance(self.dtype, float)
+                else int64
             )
-            new_tensor[:] = [x**other for x in self._cdata]
-        elif isinstance(other, float):
             new_tensor = Tensor(
-                self.shape, float64, requires_grad=self.requires_grad
+                self.shape, dtype, requires_grad=self.requires_grad
             )
-            new_tensor[:] = [x**other for x in self._cdata]
+            new_tensor[:] = [data**other for data in self._cdata]
         elif isinstance(other, Tensor):
             dtype = (
-                int64
-                if all(
-                    map(
-                        lambda x: not x.name.startswith(("float", "bool")),
-                        (self.dtype, other.dtype),
-                    )
-                )
-                else float64
+                float64
+                if isinstance(self.dtype, float)
+                or isinstance(other._dtype, float)
+                else int64
             )
+            shape = broadcast_shape(self.shape, other.shape)
+            self = self.broadcast_to(shape)
+            other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(self.shape, dtype, requires_grad=requires_grad)
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
+            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
             new_tensor[:] = [x**y for x, y in zip(self._flat, other._flat)]
         else:
             raise TypeError(
@@ -1100,7 +1083,7 @@ class Tensor:
             if self.nelement() > 1:
                 raise RuntimeError("grad can be created only for scalars")
             if None in (self.grad,):
-                self.grad = Tensor((1,), self._dtype)
+                self.grad = Tensor((1,), self.dtype)
             self.grad += (other * self ** (other - 1)) * new_tensor.grad
 
         new_tensor.grad_fn = Node(PowBackward0)
@@ -1141,7 +1124,6 @@ class Tensor:
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = [x < other for x in self._cdata]
-            return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -1149,12 +1131,12 @@ class Tensor:
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x < y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for <: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+        return new_tensor
 
     def __gt__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise greater-than operation of the tensor
@@ -1175,7 +1157,6 @@ class Tensor:
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = [x > other for x in self._cdata]
-            return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -1183,12 +1164,12 @@ class Tensor:
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x > y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for >: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+        return new_tensor
 
     def __le__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise less-than-equal operation of the tensor
@@ -1209,7 +1190,6 @@ class Tensor:
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = [x <= other for x in self._cdata]
-            return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -1217,12 +1197,12 @@ class Tensor:
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x <= y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for <=: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+        return new_tensor
 
     def __ge__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise greater-than-equal operation of the
@@ -1243,7 +1223,6 @@ class Tensor:
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = [x >= other for x in self._cdata]
-            return new_tensor
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -1251,12 +1230,12 @@ class Tensor:
                     f"{self.shape} {other.shape}"
                 )
             new_tensor[:] = [x >= y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for >=: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
+        return new_tensor
 
     @property
     def buffer(self) -> t.Any:
@@ -1501,12 +1480,12 @@ class Tensor:
         :raises ValueError: If the tensor is multidimensional.
         """
         if self.ndim == 1:
-            itemsize = self._dtype.itemsize
+            itemsize = self.dtype.itemsize
             size = (self.nbytes // itemsize,)
             offset = (self._offset * self.itemsize) // itemsize
             return Tensor(
                 size,
-                self._dtype,
+                self.dtype,
                 self.device,
                 self.requires_grad,
                 buffer=self,
@@ -1515,7 +1494,7 @@ class Tensor:
         elif self.ndim > 1:
             return Tensor(
                 self.shape,
-                self._dtype,
+                self.dtype,
                 self.device,
                 self.requires_grad,
                 buffer=self,
@@ -1538,7 +1517,7 @@ class Tensor:
             reshaped copy.
         """
         if shape == -1:
-            new_tensor = Tensor((self.nelement(),), self._dtype)
+            new_tensor = Tensor((self.nelement(),), self.dtype)
             new_tensor[:] = self
             return new_tensor
         new_tensor = self._view()
@@ -1609,7 +1588,7 @@ class Tensor:
         if isinstance(max, Tensor) and max.shape != self.shape:
             raise ValueError("max must have same shape as the input tensor")
         if out is None:
-            out = Tensor(self._shape, self._dtype)
+            out = Tensor(self._shape, self.dtype)
         F = self.flat()
         R = range(len(F))
         if isinstance(min, Tensor) and isinstance(max, Tensor):
@@ -1639,7 +1618,7 @@ class Tensor:
         """Return a copy of the tensor collapsed into one dimension."""
         new_tensor = Tensor(
             (self.nelement(),),
-            self._dtype,
+            self.dtype,
             self.device,
             self.requires_grad,
         )
@@ -1648,7 +1627,11 @@ class Tensor:
 
     ravel = flatten
 
-    def view_(self, shape: Size, strides: Size) -> Tensor:
+    def view_(
+        self,
+        shape: Size | tuple[builtins.int, ...],
+        strides: Size | tuple[builtins.int, ...],
+    ) -> Tensor:
         """Create a new view of the tensor with the specified shape and
         strides.
 
@@ -1682,13 +1665,18 @@ class Tensor:
         if sorted((dim0, dim1)) != list(range(self.ndim)):
             raise ValueError("Invalid dimensions permutation")
         dims = tuple(reversed(sorted((dim0, dim1))))
-        shape = Size(tuple(self._shape[dim] for dim in dims))
-        strides = Size(tuple(self._strides[dim] for dim in dims))
+        shape = tuple(self._shape[dim] for dim in dims)
+        strides = tuple(self._strides[dim] for dim in dims)
         return self.view_(shape, strides)
 
     def t(self) -> Tensor:
         """Transpose dimensions 0 and 1."""
         return self.transpose(0, 1)
+
+    @property
+    def T(self) -> Tensor:
+        """Alias for self.t()."""
+        return self.t()
 
     def unique(self, sorted: builtins.bool = True) -> Tensor:
         """Return unique elements from the tensor.
@@ -1700,7 +1688,7 @@ class Tensor:
         size = len((unique := set(self._cdata)))
         new_tensor = Tensor(
             (size,),
-            self._dtype,
+            self.dtype,
             self.device,
             self.requires_grad,
         )
@@ -1781,6 +1769,31 @@ class Tensor:
             raise ValueError("Value must be an integer or a float")
         self[:] = value
         return self
+
+    def unsqueeze(self, dim: builtins.int) -> Tensor:
+        """Return a new tensor with a singleton dimension inserted at
+        the specified position.
+
+        :param dim: The position at which to insert the new singleton
+            dimension.
+        :return: A new tensor with the updated shape.
+        :raises ValueError: If `dim` is not within the valid range.
+        """
+        if dim < 0:
+            dim += self.ndim + 1
+        if not (0 <= dim <= self.ndim):
+            raise ValueError(
+                f"Dimension {dim} out of range for tensor of shape "
+                f"{self.shape} with {self.ndim} dimensions"
+            )
+        shape = self.shape[:dim] + (1,) + self.shape[dim:]
+        new_tensor = Tensor(
+            shape,
+            dtype=self.dtype,
+            requires_grad=self.requires_grad,
+        )
+        new_tensor[:] = self[:]
+        return new_tensor
 
     def add(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
         """Perform element-wise addition of the tensor with a scalar or
@@ -1949,271 +1962,10 @@ class Tensor:
         new_tensor[:] = max(self._flat)
         return new_tensor
 
-    def exp(self) -> Tensor:
-        """Perform element-wise exponentiation of the tensor.
-
-        This method supports exponentiation. The resulting tensor is of
-        the same shape and dtype as the input. The exponentiation
-        function is defined as::
-
-            exp(x) = math.exp(x)
-
-        :return: A new tensor containing the result of the element-wise
-            exponentiation.
-        """
-        new_tensor = Tensor(
-            self.shape,
-            self.dtype,
-            requires_grad=self.requires_grad,
-        )
-        new_tensor[:] = [math.exp(dim) for dim in self._flat]
-
-        def ExpBackward0() -> None:
-            """Backpropagation implementation for exponentiation.
-
-            Computes gradient for `self` and propagate it. The exp
-            gradient is defined as::
-
-                exp'(x) = math.exp(x)
-            """
-            if self.nelement() > 1:
-                raise RuntimeError("grad can be created only for scalars")
-            if None in (self.grad,):
-                self.grad = Tensor((1,), self._dtype)
-            self.grad += new_tensor.exp() * new_tensor.grad
-
-        new_tensor.grad_fn = Node(ExpBackward0)
-        new_tensor.grad_fn.inputs = (self,)
-        return new_tensor
-
-    def relu(self) -> Tensor:
-        """Apply the Rectified Linear Unit (ReLU) function element-wise.
-
-        ReLU sets all negative values in the tensor to zero and keeps
-        positive values unchanged. This operation is differentiable, and
-        gradients are propagated only for positive elements. The relu
-        function is defined as::
-
-            relu(x) = max(x, 0)
-
-        :return: Output tensor after applying the ReLU function, with
-            gradients linked for backpropagation.
-        """
-        new_tensor = Tensor(
-            self.shape,
-            self.dtype,
-            requires_grad=self.requires_grad,
-        )
-        if len(self.shape) == 1:
-            new_tensor[:] = (
-                safe_max(self[dim]) for dim in range(self.shape[0])
-            )
-        else:
-            N = range(py_max(self.shape))
-            for dim in itertools.product(N, N):
-                try:
-                    new_tensor[dim] = safe_max(self[dim])
-                except IndexError:
-                    continue
-
-        def ReluBackward0() -> None:
-            """Backpropagation implementation for ReLU.
-
-            Computes gradients for `self` and propagates them. The relu
-            gradient is defined as::
-
-                relu'(x) = 1 if x > 0 else 0
-
-            .. seealso::
-
-                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
-                    activation_functions.html#relu
-            """
-            if self.nelement() > 1:
-                raise RuntimeError("grad can be created only for scalars")
-            if None in (self.grad,):
-                self.grad = Tensor((1,), self.dtype)
-            self.grad += (new_tensor > 0) * new_tensor.grad
-
-        new_tensor.grad_fn = Node(ReluBackward0)
-        new_tensor.grad_fn.inputs = (self,)
-        return new_tensor
-
-    def elu(self, alpha: builtins.float = 1.0) -> Tensor:
-        """Apply the Exponential Linear Unit (ELU) function
-        element-wise.
-
-        ELU is a function that tend to converge cost to zero faster and
-        produce more accurate results. This operation is differentiable,
-        and gradients are propagated only for positive elements. The elu
-        function is defined as::
-
-            elu(x) = x if x >- 0 else alpha * (exp(x) - 1)
-
-        :param alpha: Value for the ELU formulation, defaults to 1.0.
-        :return: Output tensor after applying the ELU function, with
-            gradients linked for backpropagation.
-        """
-        new_tensor = Tensor(
-            self.shape,
-            self.dtype,
-            requires_grad=self.requires_grad,
-        )
-        data: list[t.Any] = []
-        if len(self.shape) == 1:
-            iterator = range(self.shape[0])
-        else:
-            N = range(py_max(self.shape))
-            iterator = itertools.product(N, N)
-        for dim in iterator:
-            try:
-                if self[dim] <= 0:
-                    data.append(alpha * (normal_exp(self[dim]) - 1))
-                else:
-                    data.append(self[dim])
-            except IndexError:
-                continue
-        new_tensor[:] = data
-
-        def EluBackward0() -> None:
-            """Backpropagation implementation for ELU.
-
-            Computes gradients for `self` and propagates them. The elu
-            gradient is defined as::
-
-                elu'(x) = 1 if x > 0 else alpha * exp(x)
-
-            .. seealso::
-
-                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
-                    activation_functions.html#elu
-            """
-            if self.nelement() > 1:
-                raise RuntimeError("grad can be created only for scalars")
-            if None in (self.grad,):
-                self.grad = Tensor((1,), self.dtype)
-            self.grad += (
-                1.0 if new_tensor > 0 else alpha * normal_exp(new_tensor)
-            ) * new_tensor.grad
-
-        new_tensor.grad_fn = Node(EluBackward0)
-        new_tensor.grad_fn.inputs = (self,)
-        return new_tensor
-
-    def tanh(self) -> Tensor:
-        """Apply the Hyperbolic Tangent (Tanh) function element-wise.
-
-        Tanh squashes all the values between the range of -1 to 1. This
-        operation is differentiable, and gradients are propagated. The
-        tanh function is defined as::
-
-            tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
-
-        :return: Output tensor after applying the Tanh function, with
-            gradients linked for backpropagation.
-        """
-        new_tensor = Tensor(
-            self.shape,
-            self.dtype,
-            requires_grad=self.requires_grad,
-        )
-        if len(self.shape) == 1:
-            new_tensor[:] = [
-                ((x := normal_exp(self[dim])) - (y := safe_exp(-self[dim])))
-                / (x + y)
-                for dim in range(self.shape[0])
-            ]
-        else:
-            N = range(py_max(self.shape))
-            for dim in itertools.product(N, N):
-                try:
-                    new_tensor[dim] = (
-                        (x := normal_exp(self[dim]))
-                        - (y := safe_exp(-self[dim]))
-                    ) / (x + y)
-                except IndexError:
-                    continue
-
-        def TanhBackward0() -> None:
-            """Backpropagation implementation for Tanh.
-
-            Computes gradients for `self` and propagates them. The tanh
-            gradient is defined as::
-
-                tanh'(x) = 1 - tanh(x)**2
-
-            .. seealso::
-
-                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
-                    activation_functions.html#tanh
-            """
-            if self.nelement() > 1:
-                raise RuntimeError("grad can be created only for scalars")
-            if None in (self.grad,):
-                self.grad = Tensor((1,), self.dtype)
-            self.grad += (1.0 - new_tensor**2) * new_tensor.grad
-
-        new_tensor.grad_fn = Node(TanhBackward0)
-        new_tensor.grad_fn.inputs = (self,)
-        return new_tensor
-
-    def sigmoid(self) -> Tensor:
-        """Apply the Sigmoid function element-wise.
-
-        Sigmoid function squashes between 0 and 1. This operation is
-        differentiable, and gradients are propagated. The sigmoid
-        function is defined as::
-
-            sigmoid(x) = 1 / (1 + exp(-x))
-
-        :return: Output tensor after applying the Sigmoid function, with
-            gradients linked for backpropagation.
-        """
-        new_tensor = Tensor(
-            self.shape,
-            self.dtype,
-            requires_grad=self.requires_grad,
-        )
-        data = []
-        if len(self.shape) == 1:
-            iterator = range(self.shape[0])
-        else:
-            N = range(py_max(self.shape))
-            iterator = itertools.product(N, N)
-        for dim in iterator:
-            try:
-                data.append(1.0 / (1 + safe_exp(self[dim])))
-            except IndexError:
-                continue
-        new_tensor[:] = data
-
-        def SigmoidBackward0() -> None:
-            """Backpropagation implementation for Sigmoid.
-
-            Computes gradients for `self` and propagates them. The
-            sigmoid gradient is defined as::
-
-                sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
-
-            .. seealso::
-
-                [1] https://ml-cheatsheet.readthedocs.io/en/latest/
-                    activation_functions.html#sigmoid
-            """
-            if self.nelement() > 1:
-                raise RuntimeError("grad can be created only for scalars")
-            if None in (self.grad,):
-                self.grad = Tensor((1,), self.dtype)
-            self.grad -= (new_tensor * (1 - new_tensor)) * new_tensor.grad
-
-        new_tensor.grad_fn = Node(SigmoidBackward0)
-        new_tensor.grad_fn.inputs = (self,)
-        return new_tensor
-
 
 @function_dispatch
 def tensor(
-    data: ArrayLike,
+    data: Number | ArrayLike,
     *,
     dtype: None | Dtype = None,
     device: DeviceType = None,
@@ -2238,10 +1990,10 @@ def tensor(
     """
     if not has_uniform_shape(data):
         raise ValueError("Input data is not uniformly nested")
-    size = calculate_shape_from_data(data)
+    size = size if (size := calculate_shape_from_data(data)) else (1,)
     array_like: list[t.Any] = []
 
-    def chain_from_iterable(object: ArrayLike) -> None:
+    def chain_from_iterable(object: Number | ArrayLike) -> None:
         """Recursively flatten the input iterable."""
         if isinstance(object, Iterable) and not isinstance(data, (str, bytes)):
             for idx in object:
