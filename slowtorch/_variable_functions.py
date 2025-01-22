@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Saturday, January 18 2025
+Last updated on: Tuesday, January 21 2025
 
 This module provides essential tensor creation and initialization
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -243,6 +243,40 @@ def randperm(
     generator.internal.shuffle(data)
     new_tensor[:] = data
     return new_tensor
+
+
+@function_dispatch
+def uniform_(
+    tensor: Tensor,
+    a: float = 0.0,
+    b: float = 1.0,
+    generator: None | Generator = None,
+) -> Tensor:
+    """Fill the input tensor with values drawn from a uniform
+    distribution U(a, b).
+
+    The uniform distribution U(a, b) generates values such that::
+
+        U(a, b) = a <= x < b
+
+    :param tensor: The tensor to initialize.
+    :param a: The lower bound of the uniform distribution (inclusive).
+    :param b: The upper bound of the uniform distribution (exclusive).
+    :return: The modified tensor.
+    :raises ValueError: If `a` >= `b`.
+    """
+    if a >= b:
+        raise ValueError(f"Invalid range, a ({a}) must be less than b ({b})")
+    if generator is None:
+        generator = default_generator
+    size = tensor.shape
+    N = range(max(size))
+    for dim in itertools.product(N, N):
+        try:
+            tensor[dim] = generator.internal.uniform(a, b)
+        except IndexError:
+            continue
+    return tensor
 
 
 @function_dispatch
