@@ -44,6 +44,7 @@ This module provides key important features like::
 
 from __future__ import annotations
 
+import math
 import typing as t
 from collections import OrderedDict
 
@@ -52,12 +53,14 @@ from slowtorch import empty
 from slowtorch._tensor import Tensor
 from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
+from slowtorch._variable_functions import uniform_
 
 __all__: list[str] = [
     "Flatten",
     "Linear",
     "Module",
     "Parameter",
+    "Sequential",
 ]
 
 
@@ -205,6 +208,58 @@ class Module:
         return self.train(False)
 
 
+class Sequential(Module):
+    """A container module that sequentially applies a list of
+    sub-modules.
+
+    Modules in `Sequential` are executed in the order they are added.
+    This class is particularly useful for building neural network layers
+    that can be executed one after another without requiring manual
+    forwarding.
+
+    Modules can be added either as positional arguments or as a single
+    ordered dictionary.
+    """
+
+    def __init__(self, *args: Module) -> None:
+        """Initialize the `Sequential` container with modules."""
+        super().__init__()
+        self._modules = OrderedDict()
+        if len(args) == 1 and isinstance(args[0], OrderedDict):
+            iterator = args[0].items()
+        else:
+            iterator = enumerate(args)
+        for name, module in iterator:
+            self.__setattr__(str(name), module)
+
+    def __len__(self) -> int:
+        """Return the number of sub-modules in `Sequential` container.
+
+        :return: The count of sub-modules.
+        """
+        return len(self._modules)
+
+    def __iter__(self) -> t.Iterator[None | Module]:
+        """Return an iterator over the sub-modules in `Sequential`
+        container.
+
+        :return: An iterator over the sub-modules.
+        """
+        return iter(self._modules.values())
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Compute the forward pass by applying each sub-module in
+        sequence.
+
+        :param input: The input tensor to the `Sequential` container.
+        :return: The output tensor after applying all sub-modules.
+        """
+        for module in self:
+            if module is not None:
+                input = module(input)
+        return input
+
+
 class Flatten(Module):
     """Flatten a contiguous range of dims into a tensor."""
 
@@ -289,6 +344,7 @@ class Linear(Module):
             )
         else:
             self.bias = None
+        self.reset_parameters()
 
     def __repr__(self) -> str:
         """Return a string representation of the `Linear` object."""
@@ -296,6 +352,19 @@ class Linear(Module):
             f"{type(self).__name__}(in_features={self.in_features}, "
             f"out_features={self.out_features}, bias={self.bias is not None})"
         )
+
+    def reset_parameters(self) -> None:
+        """Reset the parameters of the layer using uniform
+        initialization.
+
+        Weights and Bias, if present are initialized from::
+
+            U(-k, k), where k = 1 / sqrt(in_features)
+        """
+        k = 1.0 / math.sqrt(self.in_features)
+        uniform_(self.weight, -k, k)
+        if self.bias is not None:
+            uniform_(self.bias, -k, k)
 
     def forward(self, input: Tensor) -> Tensor:
         """Perform the forward pass of the linear layer.
