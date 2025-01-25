@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, January 21 2025
+Last updated on: Friday, January 24 2025
 
 Tensor object.
 
@@ -78,6 +78,7 @@ from slowtorch._utils import get_step
 from slowtorch._utils import has_uniform_shape
 from slowtorch._utils import safe_range
 from slowtorch._utils import safe_round
+from slowtorch._utils import set_module
 
 __all__: list[str] = [
     "bool",
@@ -141,6 +142,7 @@ def set_printoptions(precision: None | int = None) -> None:
     Tensor._print_opts.precision = precision
 
 
+@set_module("slowtorch.autograd")
 class Node:
     """Represent a node in the computational graph for gradient
     computation.
@@ -172,6 +174,7 @@ class Node:
             self.backward()
 
 
+@set_module("slowtorch")
 @function_dispatch
 class Tensor:
     """Represent a multi-dimensional tensor object.
@@ -199,7 +202,6 @@ class Tensor:
     :raises ValueError: If invalid strides or offsets are provided.
     """
 
-    __module__: str = "slowtorch"
     _print_opts = PRINT_OPTS
 
     def __init__(

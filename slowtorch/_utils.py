@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Sunday, January 19 2025
+Last updated on: Friday, January 24 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -67,6 +67,20 @@ pi: float = math.pi
 
 
 @function_dispatch
+def set_module(mod: str) -> t.Callable[..., t.Any]:
+    """Decorator for overriding `__module__` on a function or class."""
+
+    def decorator(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
+        """Inner function."""
+        if mod is not None:
+            func.__module__ = mod
+        return func
+
+    return decorator
+
+
+@set_module("slowtorch")
+@function_dispatch
 class Device:
     """Represent a computational device for executing Tensor operations.
 
@@ -83,7 +97,6 @@ class Device:
         defaults to 0.
     """
 
-    __module__: str = "slowtorch"
     __qualname__: str = "device"
 
     def __init__(self, type: str = "cpu", index: int = 0) -> None:
@@ -104,6 +117,7 @@ DeviceType: t.TypeAlias = None | str | int | Device
 device = Device
 
 
+@set_module("slowtorch")
 @function_dispatch
 class Dtype:
     """Represent data types used in the SlowTorch framework.
@@ -122,7 +136,6 @@ class Dtype:
         internal operations or comparisons.
     """
 
-    __module__: str = "slowtorch"
     __qualname__: str = "dtype"
 
     def __init__(
@@ -153,18 +166,22 @@ class Size(tuple[int, ...]):
     This class extends the built-in tuple to provide a clear and
     descriptive representation for tensor dimensions.
 
-    :param shape: A tuple representing the dimensions of the tensor.
+    :param iterable: A tuple representing the dimensions of the tensor.
     """
 
-    def __init__(self, shape: tuple[int, ...]) -> None:
-        """Initialize a `Size` instance with some shape."""
-        if not all(isinstance(dim, int) and dim >= 0 for dim in shape):
+    def __init__(self, iterable: tuple[int, ...]) -> None:
+        """Initialize a `Size` instance with some iterable."""
+        if not all(isinstance(dim, int) and dim >= 0 for dim in iterable):
             raise ValueError("Dimensions must be non-negative")
-        self.value = shape
+        self.iterable = iterable
 
     def __repr__(self) -> str:
         """Return a string representation of the `Size` object."""
-        return f"slowtorch.{type(self).__qualname__}({list(self.value)})"
+        return f"slowtorch.{type(self).__qualname__}({list(self.iterable)})"
+
+    def numel(self) -> int:
+        """Return total number of elements a tensor would contain."""
+        return calculate_size(self.iterable)
 
 
 @function_dispatch
