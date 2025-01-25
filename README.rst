@@ -114,10 +114,10 @@ Tensor Creation Ops
 
 .. code-block:: python
 
-    >>> slowtorch.empty((2, 3))
+    >>> slowtorch.empty(2, 3)
     tensor([[ 0.,  0.,  0.], 
             [ 0.,  0.,  0.]])
-    >>> slowtorch.empty((3, 3), dtype=slowtorch.int64)
+    >>> slowtorch.empty(3, 3, dtype=slowtorch.int64)
     tensor([[0, 0, 0], 
             [0, 0, 0], 
             [0, 0, 0]])
@@ -126,17 +126,17 @@ Tensor Creation Ops
 
 .. code-block:: python
 
-    >>> slowtorch.zeros((2, 3))
+    >>> slowtorch.zeros(2, 3)
     tensor([[ 0.,  0.,  0.], 
             [ 0.,  0.,  0.]])
-    >>> slowtorch.zeros((2,))
+    >>> slowtorch.zeros(2)
     tensor([ 0.,  0.])
 
 - **slowtorch.ones.** Create a tensor filled with ones.
 
 .. code-block:: python
 
-    >>> slowtorch.ones((2, 3))
+    >>> slowtorch.ones(2, 3)
     tensor([[ 1.,  1.,  1.], 
             [ 1.,  1.,  1.]])
     >>> slowtorch.ones(5)
@@ -146,7 +146,7 @@ Tensor Creation Ops
 
 .. code-block:: python
 
-    >>> slowtorch.full((2, 3), 3.141592)
+    >>> slowtorch.full(2, 3, fill_value=3.141592)
     tensor([[3.1416, 3.1416, 3.1416], 
             [3.1416, 3.1416, 3.1416]])
 
@@ -183,7 +183,7 @@ Tensor class reference
     >>> a = slowtorch.tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]])
     >>> a.ndim
     2
-    >>> b = slowtorch.zeros((2, 3, 4))
+    >>> b = slowtorch.zeros(2, 3, 4)
     >>> b.ndim
     3
 
@@ -191,14 +191,14 @@ Tensor class reference
 
 .. code-block:: python
 
-    >>> a = slowtorch.zeros((3, 2), dtype=slowtorch.float64)
+    >>> a = slowtorch.zeros(3, 2, dtype=slowtorch.float64)
     >>> a
     tensor([[ 0.,  0.], 
             [ 0.,  0.], 
             [ 0.,  0.]])
     >>> a.nbytes
     48
-    >>> b = slowtorch.zeros((1, 3), dtype=slowtorch.int64)
+    >>> b = slowtorch.zeros(1, 3, dtype=slowtorch.int64)
     >>> b
     tensor([[0, 0, 0]])
     >>> b.nbytes
@@ -209,7 +209,7 @@ Tensor class reference
 
 .. code-block:: python
 
-    >>> a = slowtorch.full((2, 3), 2.71253)
+    >>> a = slowtorch.full(2, 3, fill_value=2.71253)
     >>> a
     tensor([[2.71253, 2.71253, 2.71253], 
             [2.71253, 2.71253, 2.71253]])
@@ -223,12 +223,12 @@ Tensor class reference
 
 .. code-block:: python
 
-    >>> a = slowtorch.zeros((1, 3), dtype=slowtorch.int64)
+    >>> a = slowtorch.zeros(1, 3, dtype=slowtorch.int64)
     >>> a
     tensor([[0, 0, 0]])
     >>> a.shape
     (1, 3)
-    >>> b = slowtorch.zeros((3, 5, 2), dtype=slowtorch.float64)
+    >>> b = slowtorch.zeros(3, 5, 2, dtype=slowtorch.float64)
     >>> b.shape
     (3, 5, 2)
     >>> b.shape = (3, 10)
@@ -242,7 +242,7 @@ Tensor class reference
 
 .. code-block:: python
 
-    >>> a = slowtorch.ones((2, 7))
+    >>> a = slowtorch.ones(2, 7)
     >>> a.data
     tensor([[ 1.,  1.,  1.,  1.,  1.,  1.,  1.], 
             [ 1.,  1.,  1.,  1.,  1.,  1.,  1.]])
@@ -251,10 +251,10 @@ Tensor class reference
 
 .. code-block:: python
 
-    >>> a = slowtorch.ones((2, 7))
+    >>> a = slowtorch.ones(2, 7)
     >>> a.dtype
     slowtorch.float64
-    >>> b = slowtorch.zeros((3, 5, 2), dtype=slowtorch.int16)
+    >>> b = slowtorch.zeros(3, 5, 2, dtype=slowtorch.int16)
     >>> b.dtype
     slowtorch.int16
     >>> type(b.dtype)
@@ -283,7 +283,7 @@ Tensor class reference
 
 .. code-block:: python
 
-    >>> a = slowtorch.zeros((1, 2, 3))
+    >>> a = slowtorch.zeros(1, 2, 3)
     >>> a.is_meta
     False
 
@@ -322,7 +322,7 @@ Tensor class methods
     >>> a = slowtorch.tensor((1, 2, 3, 4, 5))
     >>> a.size()
     slowtorch.Size([5])
-    >>> b = slowtorch.ones((2, 3))
+    >>> b = slowtorch.ones(2, 3)
     >>> b
     tensor([[ 1.,  1.,  1.], 
             [ 1.,  1.,  1.]])
@@ -334,7 +334,7 @@ Tensor class methods
 
 .. code-block:: python
 
-    >>> a = slowtorch.ones((2, 3))
+    >>> a = slowtorch.ones(2, 3)
     >>> a.stride()
     (3, 1)
 
@@ -343,7 +343,7 @@ Tensor class methods
 
 .. code-block:: python
 
-    >>> a = slowtorch.ones((2, 3))
+    >>> a = slowtorch.ones(2, 3)
     >>> a
     tensor([[ 1.,  1.,  1.], 
             [ 1.,  1.,  1.]])
