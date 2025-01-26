@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 24 2025
+Last updated on: Saturday, January 25 2025
 
 Tensor object.
 
@@ -1272,7 +1272,7 @@ class Tensor:
 
     def dim(self) -> int:
         """Return the number of dimensions of the tensor."""
-        return len(self._shape)
+        return len(self.shape)
 
     ndim = property(dim)
 
@@ -1390,15 +1390,15 @@ class Tensor:
 
     def nelement(self) -> int:
         """Return total number of elements in a tensor."""
-        return calculate_size(self._shape)
+        return calculate_size(self.shape)
 
     numel = nelement
 
     def size(self, dim: None | int = None) -> Size | tuple[int, ...] | int:
         """Returns the size of the tensor."""
         if dim is not None:
-            return self._shape[dim]
-        return Size(self._shape)
+            return self.shape[dim]
+        return Size(self.shape)
 
     def stride(self) -> tuple[int, ...]:
         """Return the strides for traversing the tensor dimensions."""
@@ -1484,7 +1484,7 @@ class Tensor:
         """
         if self.ndim == 1:
             itemsize = self.dtype.itemsize
-            size = (self.nbytes // itemsize,)
+            size = self.nbytes // itemsize
             offset = (self._offset * self.itemsize) // itemsize
             return Tensor(
                 size,
@@ -1520,15 +1520,15 @@ class Tensor:
             reshaped copy.
         """
         if shape == -1:
-            new_tensor = Tensor((self.nelement(),), self.dtype)
+            new_tensor = Tensor(self.nelement(), self.dtype)
             new_tensor[:] = self
             return new_tensor
         new_tensor = self._view()
         try:
-            new_tensor._shape = shape
+            new_tensor.shape = shape
         except AttributeError:
             new_tensor = self.clone()
-            new_tensor._shape = shape
+            new_tensor.shape = shape
         return new_tensor
 
     reshape = view
@@ -1591,7 +1591,7 @@ class Tensor:
         if isinstance(max, Tensor) and max.shape != self.shape:
             raise ValueError("max must have same shape as the input tensor")
         if out is None:
-            out = Tensor(self._shape, self.dtype)
+            out = Tensor(self.shape, self.dtype)
         F = self.flat()
         R = range(len(F))
         if isinstance(min, Tensor) and isinstance(max, Tensor):
@@ -1668,7 +1668,7 @@ class Tensor:
         if sorted((dim0, dim1)) != list(range(self.ndim)):
             raise ValueError("Invalid dimensions permutation")
         dims = tuple(reversed(sorted((dim0, dim1))))
-        shape = tuple(self._shape[dim] for dim in dims)
+        shape = tuple(self.shape[dim] for dim in dims)
         strides = tuple(self._strides[dim] for dim in dims)
         new_tensor = self.view_(tuple(shape), tuple(strides))
 
