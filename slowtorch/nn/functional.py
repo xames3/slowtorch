@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Tuesday, January 21 2025
+Last updated on: Sunday, January 26 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -36,6 +36,7 @@ the field of deep learning.
 
 from __future__ import annotations
 
+import builtins
 import itertools
 import math
 import typing as t
@@ -45,6 +46,73 @@ from slowtorch._tensor import Tensor
 from slowtorch._utils import normal_exp
 from slowtorch._utils import safe_exp
 from slowtorch._utils import safe_max
+
+
+def sum(
+    input: Tensor,
+    dim: None | int = None,
+    keepdims: bool = False,
+) -> Tensor:
+    """Compute the sum of elements in the tensor across a specified
+    dimension.
+
+    This method computes the sum of all elements in the tensor if no
+    dimension is provided. If a dimension is specified, the method
+    reduces the tensor along the given dimension while optionally
+    retaining the reduced dimensions.
+
+    :param input: Input tensor to be summed.
+    :param dim: The dimension along which to compute the sum, defaults
+        to `None`. For `None`, the sum is computed over all elements of
+        the tensor.
+    :param keepdims: A boolean indicating whether to retain the reduced
+        dimensions in the resulting tensor, defaults to `False`.
+    :return: A new tensor containing the sum of the specified elements.
+    :raises ValueError: If the specified dimension is invalid.
+    """
+    if dim is not None and not (0 <= dim < input.ndim):
+        raise ValueError(f"Invalid dimension {dim} for tensor")
+    if dim is None:
+        shape = (1,) if not keepdims else (1,) * input.ndim
+        new_tensor = Tensor(
+            shape,
+            dtype=input.dtype,
+            requires_grad=input.requires_grad,
+        )
+        new_tensor[:] = builtins.sum(input._flat)
+    else:
+        shape = tuple(
+            input.shape[idx] for idx in range(input.ndim) if idx != dim
+        )
+        new_tensor = Tensor(
+            shape,
+            dtype=input.dtype,
+            requires_grad=input.requires_grad,
+        )
+        for idx in range(new_tensor.nelement()):
+            dims = Tensor(idx).unravel_index(shape)[0].shape
+            indices = list(dims)
+            indices.insert(dim, 0)
+            value = input[tuple(indices)]
+            value = value.sum().item() if isinstance(value, Tensor) else value
+            new_tensor[tuple(dims)] = value
+
+    def SumBackward0() -> None:
+        """Backward pass for the sum operation.
+
+        Distributes the gradient from the resulting tensor back to the
+        input tensor. If `dim` was specified, the gradient is
+        appropriately expanded to match the original tensor's shape.
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor(1, input.dtype)
+        input.grad += new_tensor.grad
+
+    new_tensor.grad_fn = Node(SumBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
 
 
 def exp(input: Tensor) -> Tensor:
@@ -78,7 +146,7 @@ def exp(input: Tensor) -> Tensor:
         if input.nelement() > 1:
             raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
-            input.grad = Tensor((1,), input.dtype)
+            input.grad = Tensor(1, input.dtype)
         input.grad += new_tensor.exp() * new_tensor.grad
 
     new_tensor.grad_fn = Node(ExpBackward0)
@@ -131,7 +199,7 @@ def relu(input: Tensor) -> Tensor:
         if input.nelement() > 1:
             raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
-            input.grad = Tensor((1,), input.dtype)
+            input.grad = Tensor(1, input.dtype)
         input.grad += (new_tensor > 0) * new_tensor.grad
 
     new_tensor.grad_fn = Node(ReluBackward0)
@@ -192,7 +260,7 @@ def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
         if input.nelement() > 1:
             raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
-            input.grad = Tensor((1,), input.dtype)
+            input.grad = Tensor(1, input.dtype)
         input.grad += (
             1.0 if new_tensor > 0 else alpha * normal_exp(new_tensor)
         ) * new_tensor.grad
@@ -253,7 +321,7 @@ def tanh(input: Tensor) -> Tensor:
         if input.nelement() > 1:
             raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
-            input.grad = Tensor((1,), input.dtype)
+            input.grad = Tensor(1, input.dtype)
         input.grad += (1.0 - new_tensor**2) * new_tensor.grad
 
     new_tensor.grad_fn = Node(TanhBackward0)
@@ -308,7 +376,7 @@ def sigmoid(input: Tensor) -> Tensor:
         if input.nelement() > 1:
             raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
-            input.grad = Tensor((1,), input.dtype)
+            input.grad = Tensor(1, input.dtype)
         input.grad -= (new_tensor * (1 - new_tensor)) * new_tensor.grad
 
     new_tensor.grad_fn = Node(SigmoidBackward0)
@@ -355,7 +423,7 @@ def linear(
         if input.nelement() > 1:
             raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad, weight.grad, bias.grad):
-            input.grad = weight.grad = bias.grad = Tensor((1,), input.dtype)
+            input.grad = weight.grad = bias.grad = Tensor(1, input.dtype)
         input.grad += new_tensor.grad @ weight
         weight.grad += new_tensor.grad.T @ input
         if bias is not None:
@@ -363,4 +431,48 @@ def linear(
 
     new_tensor.grad_fn = Node(AddmmBackward0)
     new_tensor.grad_fn.inputs = (input, weight, bias)
+    return new_tensor
+
+
+def mse_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
+    """Compute the Mean Squared Error (MSE) loss between two tensors.
+
+    This method calculates the average of the squared differences
+    between `input` and `target` tensors. It supports autograd for
+    backpropagation.
+
+    :param input: The input tensor representing predictions.
+    :param target: The target tensor representing true values.
+    :param reduction: The reduction method to apply to the computed
+        loss. Options are:
+        - `mean`: Return the average of the squared differences.
+        - `sum`: Return the sum of the squared differences.
+        - `none`: Return the squared differences without reduction.
+        Defaults to `mean`.
+    :return: A scalar tensor representing the MSE loss.
+    """
+    loss = (input - target) ** 2
+    if reduction == "mean":
+        new_tensor = loss.sum() * (1.0 / loss.nelement())
+    elif reduction == "sum":
+        new_tensor = loss.sum()
+    elif reduction == "none":
+        new_tensor = loss
+
+    def MSELossBackward0() -> None:
+        """Backpropagation implementation for MSE loss.
+
+        Computes gradients for the `input` and `target` tensors and
+        propagates them backward through the computational graph.
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad, target.grad):
+            input.grad = target.grad = Tensor(1, input.dtype)
+        grad = 2.0 / loss.nelement() if reduction == "mean" else 2.0
+        input.grad += grad * (input - target)
+        target.grad -= grad * (input - target)
+
+    new_tensor.grad_fn = Node(MSELossBackward0)
+    new_tensor.grad_fn.inputs = (input, target)
     return new_tensor
