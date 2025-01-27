@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Tuesday, January 21 2025
+Last updated on: Monday, January 27 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -53,17 +53,22 @@ from slowtorch import empty
 from slowtorch._tensor import Tensor
 from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
+from slowtorch._utils import set_module
 from slowtorch._variable_functions import uniform_
 
 __all__: list[str] = [
     "Flatten",
+    "Identity",
     "Linear",
+    "MSELoss",
     "Module",
     "Parameter",
     "Sequential",
+    "_Loss",
 ]
 
 
+@set_module("slowtorch.nn.parameter")
 class Parameter(Tensor):
     """A specialized subclass of `Tensor` designed to represent
     parameters in modules. A `Parameter` is typically used to define
@@ -100,6 +105,7 @@ class Parameter(Tensor):
         return f"Parameter containing:\n{super().__repr__()}"
 
 
+@set_module("slowtorch.nn.modules.module")
 class Module:
     """Base class for all neural network modules.
 
@@ -208,6 +214,7 @@ class Module:
         return self.train(False)
 
 
+@set_module("slowtorch.nn.modules.container")
 class Sequential(Module):
     """A container module that sequentially applies a list of
     sub-modules.
@@ -260,6 +267,7 @@ class Sequential(Module):
         return input
 
 
+@set_module("slowtorch.nn.modules.flatten")
 class Flatten(Module):
     """Flatten a contiguous range of dims into a tensor."""
 
@@ -276,6 +284,35 @@ class Flatten(Module):
         return input.flatten()
 
 
+@set_module("slowtorch.nn.modules.linear")
+class Identity(Module):
+    """A module that performs the identity operation: it returns the
+    input tensor unchanged. This is particularly useful as a placeholder
+    in model architectures or for debugging.
+    """
+
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        """Initialize `Identity` instance."""
+        super().__init__()
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Identity` object."""
+        return f"{type(self).__name__}()"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the identity operation.
+
+        This method simply returns the input tensor without modification.
+        It is useful when an operation is required in a pipeline but no
+        transformation of the input is needed.
+
+        :param input: The input tensor.
+        :return: The same tensor as the input.
+        """
+        return input
+
+
+@set_module("slowtorch.nn.modules.linear")
 class Linear(Module):
     """Represent a fully connected (linear) layer, a key component in
     neural networks, which performs a linear transformation on the
@@ -386,3 +423,91 @@ class Linear(Module):
                 f"got {input.shape[-1]}"
             )
         return slowtorch.nn.functional.linear(input, self.weight, self.bias)
+
+
+@set_module("slowtorch.nn.modules.loss")
+class _Loss(Module):
+    """Base class for all loss functions.
+
+    This class provides a common interface for initializing loss
+    functions with configurable reduction strategies. Subclasses can
+    implement specific loss computation logic while inheriting the
+    reduction handling from this base.
+
+    :param size_average: If `True`, set reduction strategy to `mean`,
+        defaults to `None`.
+    :param reduce: If `True`, set reduction strategy to `sum`, defaults
+        to `None`.
+    :param reduction: Specify the reduction method to apply to the loss.
+        Acceptable values are `mean`, `sum`, and `none`, defaults to
+        `mean`.
+    :raises ValueError: If conflicting parameters are provided or if the
+        `reduction` value is invalid.
+    """
+
+    reduction: str
+
+    def __init__(
+        self,
+        size_average: bool = None,
+        reduce: bool = None,
+        reduction: str = "mean",
+    ) -> None:
+        """Initialize `_Loss` instance with a reduction strategy."""
+        super().__init__()
+        if size_average is not None and reduce:
+            pass
+        self.reduction = reduction
+
+
+@set_module("slowtorch.nn.modules.loss")
+class MSELoss(_Loss):
+    """Mean Squared Error (MSE) Loss module.
+
+    This class calculates the Mean Squared Error loss between the
+    predicted tensor (`input`) and the target tensor (`target`). It
+    supports different reduction strategies such as `mean`, `sum`, or
+    `none`.
+
+    :param size_average: If `True`, set reduction strategy to `mean`,
+        defaults to `None`.
+    :param reduce: If `True`, set reduction strategy to `sum`, defaults
+        to `None`.
+    :param reduction: Specify the reduction method to apply to the loss.
+        Acceptable values are `mean`, `sum`, and `none`, defaults to
+        `mean`.
+    :raises ValueError: If conflicting parameters are provided or if the
+        `reduction` value is invalid.
+    """
+
+    reduction: str
+
+    def __init__(
+        self,
+        size_average: bool = None,
+        reduce: bool = None,
+        reduction: str = "mean",
+    ) -> None:
+        """Initialize `MSELoss` instance with a reduction strategy."""
+        super().__init__(size_average, reduce, reduction)
+
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:  # type: ignore
+        """Compute the MSE loss between `input` and `target` tensors.
+
+        This method calculates the squared differences between the input
+        and target tensors, and applies the reduction strategy specified
+        during initialization.
+
+        :param input: The predicted tensor.
+        :param target: The target tensor.
+        :return: A tensor representing the computed MSE loss, with
+            reduction applied as per the configured strategy.
+        :raises ValueError: If `input` and `target` tensors have
+            mismatched shapes.
+        """
+        if input.shape != target.shape:
+            raise ValueError(
+                f"Shape of input tensor {input.shape} does not match "
+                f"with target shape {target.shape}"
+            )
+        return slowtorch.nn.functional.mse_loss(input, target, self.reduction)
