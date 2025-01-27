@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 24 2025
+Last updated on: Sunday, January 26 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -315,8 +315,9 @@ def has_uniform_shape(data: Tensor) -> bool:
     )
 
 
+@set_module("slowtorch")
 @function_dispatch
-def broadcast_shape(input: Size, other: Size) -> tuple[int, ...]:
+def broadcast_shapes(input: Size, other: Size) -> tuple[int, ...]:
     """Calculate the broadcast-compatible shape for two tensors.
 
     This function aligns the two shapes from the right, padding the
