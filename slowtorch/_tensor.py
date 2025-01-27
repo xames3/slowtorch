@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Saturday, January 25 2025
+Last updated on: Sunday, January 26 2025
 
 Tensor object.
 
@@ -70,7 +70,7 @@ from slowtorch._utils import Device
 from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
-from slowtorch._utils import broadcast_shape
+from slowtorch._utils import broadcast_shapes
 from slowtorch._utils import calculate_shape_from_data
 from slowtorch._utils import calculate_size
 from slowtorch._utils import calculate_strides
@@ -364,7 +364,8 @@ class Tensor:
             if isinstance(dim, int) and axissize is not None:
                 if not (-axissize <= dim < axissize):
                     raise IndexError(
-                        f"Index {dim} new_tensor of bounds for axis {axis}"
+                        f"Index {dim} of tensor is out of bounds for "
+                        f"dimension {axis}"
                     )
                 dim = dim + axissize if dim < 0 else dim
                 offset += dim * self._strides[axis] // self.itemsize
@@ -598,7 +599,7 @@ class Tensor:
                 or other.dtype.name.startswith("float")
                 else int64
             )
-            shape = broadcast_shape(self.shape, other.shape)
+            shape = broadcast_shapes(self.shape, other.shape)
             self = self.broadcast_to(shape)
             other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
@@ -617,7 +618,7 @@ class Tensor:
             them.
             """
             if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor((1,), dtype)
+                self.grad = other.grad = Tensor(1, dtype)
             self.grad += new_tensor.grad
             other.grad += new_tensor.grad
 
@@ -668,7 +669,7 @@ class Tensor:
                 or other.dtype.name.startswith("float")
                 else int64
             )
-            shape = broadcast_shape(self.shape, other.shape)
+            shape = broadcast_shapes(self.shape, other.shape)
             self = self.broadcast_to(shape)
             other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
@@ -687,7 +688,7 @@ class Tensor:
             them.
             """
             if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor((1,), dtype)
+                self.grad = other.grad = Tensor(1, dtype)
             self.grad += new_tensor.grad
             other.grad -= new_tensor.grad
 
@@ -738,7 +739,7 @@ class Tensor:
                 or other.dtype.name.startswith("float")
                 else int64
             )
-            shape = broadcast_shape(self.shape, other.shape)
+            shape = broadcast_shapes(self.shape, other.shape)
             self = self.broadcast_to(shape)
             other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
@@ -757,7 +758,7 @@ class Tensor:
             them.
             """
             if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor((1,), dtype)
+                self.grad = other.grad = Tensor(1, dtype)
             self.grad += other * new_tensor.grad
             other.grad += self * new_tensor.grad
 
@@ -802,7 +803,7 @@ class Tensor:
             )
             new_tensor[:] = data
         elif isinstance(other, Tensor):
-            shape = broadcast_shape(self.shape, other.shape)
+            shape = broadcast_shapes(self.shape, other.shape)
             self = self.broadcast_to(shape)
             other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
@@ -827,7 +828,7 @@ class Tensor:
             them.
             """
             if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor((1,), dtype)
+                self.grad = other.grad = Tensor(1, dtype)
             self.grad += new_tensor.grad / other
             other.grad -= new_tensor.grad * (self / (other**2))
 
@@ -864,7 +865,7 @@ class Tensor:
             )
             new_tensor[:] = data
         elif isinstance(other, Tensor):
-            shape = broadcast_shape(self.shape, other.shape)
+            shape = broadcast_shapes(self.shape, other.shape)
             self = self.broadcast_to(shape)
             other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
@@ -889,7 +890,7 @@ class Tensor:
             them.
             """
             if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor((1,), dtype)
+                self.grad = other.grad = Tensor(1, dtype)
             self.grad += new_tensor.grad / other
             other.grad -= new_tensor.grad * (self / (other**2))
 
@@ -929,7 +930,7 @@ class Tensor:
                 raise ValueError(
                     "Shapes of 1D tensors must be the same for dot product"
                 )
-            new_tensor = Tensor((1,), dtype, requires_grad=requires_grad)
+            new_tensor = Tensor(1, dtype, requires_grad=requires_grad)
             new_tensor[:] = sum(
                 self[idx] * other[idx] for idx in range(self.shape[0])
             )
@@ -950,7 +951,7 @@ class Tensor:
                         for kdx in range(self.shape[1])
                     )
         elif self.ndim > 2 or other.ndim > 2:
-            shape = broadcast_shape(self.shape[:-2], other.shape[:-2]) + (
+            shape = broadcast_shapes(self.shape[:-2], other.shape[:-2]) + (
                 self.shape[-2],
                 other.shape[-1],
             )
@@ -975,7 +976,7 @@ class Tensor:
             them.
             """
             if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor((1,), dtype)
+                self.grad = other.grad = Tensor(1, dtype)
             self.grad += new_tensor.grad @ other
             other.grad += self @ new_tensor.grad
 
@@ -1009,14 +1010,10 @@ class Tensor:
             return new_tensor
         elif isinstance(other, Tensor):
             dtype = (
-                int64
-                if all(
-                    map(
-                        lambda x: not x.name.startswith(("float", "bool")),
-                        (self.dtype, other.dtype),
-                    )
-                )
-                else float64
+                float64
+                if self.dtype.name.startswith("float")
+                or other.dtype.name.startswith("float")
+                else int64
             )
             new_tensor = Tensor(self.shape, dtype)
             if self.shape != other.shape:
@@ -1052,7 +1049,8 @@ class Tensor:
         if isinstance(other, Number):
             dtype = (
                 float64
-                if isinstance(other, float) or isinstance(self.dtype, float)
+                if isinstance(other, float)
+                or self.dtype.name.startswith("float")
                 else int64
             )
             new_tensor = Tensor(
@@ -1062,11 +1060,11 @@ class Tensor:
         elif isinstance(other, Tensor):
             dtype = (
                 float64
-                if isinstance(self.dtype, float)
-                or isinstance(other._dtype, float)
+                if self.dtype.name.startswith("float")
+                or other.dtype.name.startswith("float")
                 else int64
             )
-            shape = broadcast_shape(self.shape, other.shape)
+            shape = broadcast_shapes(self.shape, other.shape)
             self = self.broadcast_to(shape)
             other = other.broadcast_to(shape)
             requires_grad = self.requires_grad or other.requires_grad
@@ -1086,7 +1084,7 @@ class Tensor:
             if self.nelement() > 1:
                 raise RuntimeError("grad can be created only for scalars")
             if None in (self.grad,):
-                self.grad = Tensor((1,), self.dtype)
+                self.grad = Tensor(1, self.dtype)
             self.grad += (other * self ** (other - 1)) * new_tensor.grad
 
         new_tensor.grad_fn = Node(PowBackward0)
@@ -1507,7 +1505,7 @@ class Tensor:
         else:
             raise ValueError("Tensors can only be viewed with the same dtype")
 
-    def view(self, shape: Size | builtins.int = -1) -> None | Tensor:
+    def view(self, *size: builtins.int) -> None | Tensor:
         """Return a new view of the tensor with the specified shape.
 
         This method attempts to reshape the tensor while keeping the
@@ -1515,20 +1513,20 @@ class Tensor:
         current memory layout, a copy of the data is made to achieve the
         desired shape.
 
-        :param shape: The desired shape for the tensor, defaults to -1.
+        :param size: The desired shape for the tensor, defaults to -1.
         :return: A reshaped view of the tensor if possible; otherwise, a
             reshaped copy.
         """
-        if shape == -1:
+        if len(size) == 1 and size[0] == -1:
             new_tensor = Tensor(self.nelement(), self.dtype)
             new_tensor[:] = self
             return new_tensor
         new_tensor = self._view()
         try:
-            new_tensor.shape = shape
+            new_tensor.shape = size
         except AttributeError:
             new_tensor = self.clone()
-            new_tensor.shape = shape
+            new_tensor.shape = size
         return new_tensor
 
     reshape = view
@@ -1610,7 +1608,7 @@ class Tensor:
     def item(self) -> t.Any:
         """Return standard scalar Python object for tensor object."""
         if self.nelement() == 1:
-            return self.view()[0]
+            return self.view(-1)[0]
         else:
             raise RuntimeError(
                 f"Tensor with {self.nelement()} elements cannot be"
@@ -1629,6 +1627,22 @@ class Tensor:
         return new_tensor
 
     ravel = flatten
+
+    def unravel_index(
+        self,
+        shape: Size | tuple[builtins.int, ...],
+    ) -> tuple[Tensor, ...]:
+        """Convert a tensor of flat indices into a multi-dimensional
+        index for a given shape.
+
+        :param shape: The shape of the tensor.
+        :return: A tuple representing the multi-dimensional index.
+        """
+        indices: list[Tensor] = []
+        for dim in reversed(shape):
+            indices.append(self % dim)
+            self = self // dim
+        return tuple(reversed(indices))
 
     def view_(
         self,
@@ -1951,7 +1965,7 @@ class Tensor:
         graph: list[tuple[Tensor, ...] | Tensor] = []
         seen: set[tuple[Tensor, ...] | Tensor] = set()
         if gradient is None:
-            gradient = Tensor((1,), float64)
+            gradient = Tensor(1, float64)
             gradient[:] = 1.0
         self.grad = gradient
 
@@ -1976,9 +1990,34 @@ class Tensor:
 
         :return: Return the maximum value as a tensor.
         """
-        new_tensor = Tensor((1,), self.dtype)
+        new_tensor = Tensor(1, self.dtype)
         new_tensor[:] = max(self._flat)
         return new_tensor
+
+    def sum(
+        self,
+        dim: None | builtins.int = None,
+        keepdims: builtins.bool = False,
+    ) -> Tensor:
+        """Compute the sum of elements in the tensor across a specified
+        dimension.
+
+        This method computes the sum of all elements in the tensor if no
+        dimension is provided. If a dimension is specified, the method
+        reduces the tensor along the given dimension while optionally
+        retaining the reduced dimensions.
+
+        :param dim: The dimension along which to compute the sum,
+            defaults to `None`. For `None`, the sum is computed over all
+            elements of the tensor.
+        :param keepdims: A boolean indicating whether to retain the
+            reduced dimensions in the resulting tensor, defaults to
+            `False`.
+        :return: A new tensor containing the sum of the specified
+            elements.
+        :raises ValueError: If the specified dimension is invalid.
+        """
+        return slowtorch.nn.functional.sum(self, dim, keepdims)
 
     def exp(self) -> Tensor:
         """Perform element-wise exponentiation of the tensor.
