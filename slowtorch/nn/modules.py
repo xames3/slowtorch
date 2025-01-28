@@ -425,6 +425,47 @@ class Linear(Module):
         return slowtorch.nn.functional.linear(input, self.weight, self.bias)
 
 
+@set_module("slowtorch.nn.modules.activation")
+class ReLU(Module):
+    """Represents a Rectified Linear Unit (ReLU) activation layer.
+
+    The ReLU activation function applies an element-wise transformation
+    to the input tensor, defined as::
+
+        relu(x) = max(x, 0)
+
+    This operation zeroes out all negative elements in the input tensor
+    while retaining positive elements. The ReLU activation function is
+    widely used in neural networks due to its simplicity and effective
+    gradient propagation for positive values.
+
+    This module can be added to a computation graph, and its gradient
+    is computed automatically during backpropagation.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the `ReLU` module."""
+        super().__init__()
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `ReLU` object."""
+        return f"{type(self).__name__}()"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the ReLU activation layer.
+
+        The forward pass applies the ReLU function to the input tensor,
+        zeroing out negative values and retaining positive values.
+
+        :param input: The input tensor to be transformed, of arbitrary
+            shape.
+        :return: A new tensor where each element is the result of the
+            ReLU operation applied to the corresponding element of the
+            input tensor.
+        """
+        return slowtorch.nn.functional.relu(input)
+
+
 @set_module("slowtorch.nn.modules.loss")
 class _Loss(Module):
     """Base class for all loss functions.
