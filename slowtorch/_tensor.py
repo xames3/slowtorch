@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Sunday, January 26 2025
+Last updated on: Monday, January 27 2025
 
 Tensor object.
 
@@ -70,13 +70,11 @@ from slowtorch._utils import Device
 from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
-from slowtorch._utils import broadcast_shapes
 from slowtorch._utils import calculate_shape_from_data
 from slowtorch._utils import calculate_size
 from slowtorch._utils import calculate_strides
 from slowtorch._utils import get_step
 from slowtorch._utils import has_uniform_shape
-from slowtorch._utils import safe_range
 from slowtorch._utils import safe_round
 from slowtorch._utils import set_module
 
@@ -284,8 +282,7 @@ class Tensor:
     ) -> str:
         """Method to mimic PyTorch's tensor as close as possible."""
         if only:
-            if not self.requires_grad:
-                return str(self._cdata[0])
+            return str(self._cdata[0])
         indent = min(2, max(0, (self.ndim - axis - 1)))
         if axis < len(self.shape):
             formatted += "["
@@ -580,51 +577,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Number):
-            dtype = (
-                float64
-                if isinstance(other, float)
-                or self.dtype.name.startswith("float")
-                else int64
-            )
-            new_tensor = Tensor(
-                self.shape, dtype, requires_grad=self.requires_grad
-            )
-            new_tensor[:] = [data + other for data in self._cdata]
-        elif isinstance(other, Tensor):
-            dtype = (
-                float64
-                if self.dtype.name.startswith("float")
-                or other.dtype.name.startswith("float")
-                else int64
-            )
-            shape = broadcast_shapes(self.shape, other.shape)
-            self = self.broadcast_to(shape)
-            other = other.broadcast_to(shape)
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-            new_tensor[:] = [x + y for x, y in zip(self._flat, other._flat)]
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for +: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-
-        def AddBackward0() -> None:
-            """Backpropagation implementation for addition.
-
-            Computes gradients for `self` and `other` and propagates
-            them.
-            """
-            if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor(1, dtype)
-            self.grad += new_tensor.grad
-            other.grad += new_tensor.grad
-
-        new_tensor.grad_fn = Node(AddBackward0)
-        new_tensor.grad_fn.inputs = (self, other)
-        return new_tensor
+        return slowtorch.nn.functional.add(self, other)
 
     def __radd__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse addition, delegating to `__add__`.
@@ -650,51 +603,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Number):
-            dtype = (
-                float64
-                if isinstance(other, float)
-                or self.dtype.name.startswith("float")
-                else int64
-            )
-            new_tensor = Tensor(
-                self.shape, dtype, requires_grad=self.requires_grad
-            )
-            new_tensor[:] = [data - other for data in self._cdata]
-        elif isinstance(other, Tensor):
-            dtype = (
-                float64
-                if self.dtype.name.startswith("float")
-                or other.dtype.name.startswith("float")
-                else int64
-            )
-            shape = broadcast_shapes(self.shape, other.shape)
-            self = self.broadcast_to(shape)
-            other = other.broadcast_to(shape)
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-            new_tensor[:] = [x - y for x, y in zip(self._flat, other._flat)]
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for -: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-
-        def SubBackward0() -> None:
-            """Backpropagation implementation for subtraction.
-
-            Computes gradients for `self` and `other` and propagates
-            them.
-            """
-            if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor(1, dtype)
-            self.grad += new_tensor.grad
-            other.grad -= new_tensor.grad
-
-        new_tensor.grad_fn = Node(SubBackward0)
-        new_tensor.grad_fn.inputs = (self, other)
-        return new_tensor
+        return slowtorch.nn.functional.sub(self, other)
 
     def __rsub__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse subtraction, delegating to `__sub__`.
@@ -720,51 +629,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Number):
-            dtype = (
-                float64
-                if isinstance(other, float)
-                or self.dtype.name.startswith("float")
-                else int64
-            )
-            new_tensor = Tensor(
-                self.shape, dtype, requires_grad=self.requires_grad
-            )
-            new_tensor[:] = [data * other for data in self._cdata]
-        elif isinstance(other, Tensor):
-            dtype = (
-                float64
-                if self.dtype.name.startswith("float")
-                or other.dtype.name.startswith("float")
-                else int64
-            )
-            shape = broadcast_shapes(self.shape, other.shape)
-            self = self.broadcast_to(shape)
-            other = other.broadcast_to(shape)
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-            new_tensor[:] = [x * y for x, y in zip(self._flat, other._flat)]
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for +: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-
-        def MulBackward0() -> None:
-            """Backpropagation implementation for multiplication.
-
-            Computes gradients for `self` and `other` and propagates
-            them.
-            """
-            if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor(1, dtype)
-            self.grad += other * new_tensor.grad
-            other.grad += self * new_tensor.grad
-
-        new_tensor.grad_fn = Node(MulBackward0)
-        new_tensor.grad_fn.inputs = (self, other)
-        return new_tensor
+        return slowtorch.nn.functional.mul(self, other)
 
     def __rmul__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse multiplication, delegating to `__mul__`.
@@ -790,51 +655,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Number):
-            data = []
-            for idx in self._cdata:
-                try:
-                    data.append(idx / other)
-                except ZeroDivisionError:
-                    data.append(builtins.float("inf"))
-            new_tensor = Tensor(
-                self.shape, self.dtype, requires_grad=self.requires_grad
-            )
-            new_tensor[:] = data
-        elif isinstance(other, Tensor):
-            shape = broadcast_shapes(self.shape, other.shape)
-            self = self.broadcast_to(shape)
-            other = other.broadcast_to(shape)
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, self.dtype, requires_grad=requires_grad)
-            data = []
-            for x, y in zip(self._flat, other._flat):
-                try:
-                    data.append(x / y)
-                except ZeroDivisionError:
-                    data.append(builtins.float("inf"))
-            new_tensor[:] = data
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for /: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-
-        def DivBackward0() -> None:
-            """Backpropagation implementation for division.
-
-            Computes gradients for `self` and `other` and propagates
-            them.
-            """
-            if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor(1, dtype)
-            self.grad += new_tensor.grad / other
-            other.grad -= new_tensor.grad * (self / (other**2))
-
-        new_tensor.grad_fn = Node(DivBackward0)
-        new_tensor.grad_fn.inputs = (self, other)
-        return new_tensor
+        return slowtorch.nn.functional.div(self, other)
 
     def __floordiv__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise division of the tensor with a scalar or
@@ -852,51 +673,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Number):
-            data = []
-            for idx in self._cdata:
-                try:
-                    data.append(idx // other)
-                except ZeroDivisionError:
-                    data.append(builtins.float("inf"))
-            new_tensor = Tensor(
-                self.shape, self.dtype, requires_grad=self.requires_grad
-            )
-            new_tensor[:] = data
-        elif isinstance(other, Tensor):
-            shape = broadcast_shapes(self.shape, other.shape)
-            self = self.broadcast_to(shape)
-            other = other.broadcast_to(shape)
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, self.dtype, requires_grad=requires_grad)
-            data = []
-            for x, y in zip(self._flat, other._flat):
-                try:
-                    data.append(x // y)
-                except ZeroDivisionError:
-                    data.append(builtins.float("inf"))
-            new_tensor[:] = data
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for //: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-
-        def DivBackward0() -> None:
-            """Backpropagation implementation for division.
-
-            Computes gradients for `self` and `other` and propagates
-            them.
-            """
-            if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor(1, dtype)
-            self.grad += new_tensor.grad / other
-            other.grad -= new_tensor.grad * (self / (other**2))
-
-        new_tensor.grad_fn = Node(DivBackward0)
-        new_tensor.grad_fn.inputs = (self, other)
-        return new_tensor
+        return slowtorch.nn.functional.div(self, other, rounding_mode="floor")
 
     def __matmul__(self, other: Tensor) -> Tensor:
         """Perform element-wise matrix multiplication of the tensor with
@@ -913,76 +690,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape doesn't
             match `self.shape`.
         """
-        if not isinstance(other, Tensor):
-            raise TypeError(
-                f"Unsupported operand type(s) for @: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-        dtype = (
-            float64
-            if self.dtype.name.startswith("float")
-            or other.dtype.name.startswith("float")
-            else int64
-        )
-        requires_grad = self.requires_grad or other.requires_grad
-        if self.ndim == 1 and other.ndim == 1:
-            if self.shape[0] != other.shape[0]:
-                raise ValueError(
-                    "Shapes of 1D tensors must be the same for dot product"
-                )
-            new_tensor = Tensor(1, dtype, requires_grad=requires_grad)
-            new_tensor[:] = sum(
-                self[idx] * other[idx] for idx in range(self.shape[0])
-            )
-        elif self.ndim == 2 or other.ndim == 2:
-            if self.shape[1] != other.shape[0]:
-                raise ValueError(
-                    "Shapes are not aligned for matrix multiplication"
-                )
-            new_tensor = Tensor(
-                (self.shape[0], other.shape[1]),
-                dtype,
-                requires_grad=requires_grad,
-            )
-            for idx in range(new_tensor.shape[0]):
-                for jdx in range(new_tensor.shape[1]):
-                    new_tensor[idx, jdx] = sum(
-                        self[idx, kdx] * other[kdx, jdx]
-                        for kdx in range(self.shape[1])
-                    )
-        elif self.ndim > 2 or other.ndim > 2:
-            shape = broadcast_shapes(self.shape[:-2], other.shape[:-2]) + (
-                self.shape[-2],
-                other.shape[-1],
-            )
-            self = self.broadcast_to(shape[:-2] + self.shape[-2:])
-            other = other.broadcast_to(shape[:-2] + self.shape[-2:])
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-            for batch in safe_range(new_tensor.shape[:-2]):
-                for idx in range(new_tensor.shape[-2]):
-                    for jdx in range(new_tensor.shape[-1]):
-                        new_tensor[batch, idx, jdx] = sum(
-                            self[batch, idx, kdx] * other[batch, kdx, jdx]
-                            for kdx in range(self.shape[-1])
-                        )
-        else:
-            raise ValueError("Invalid shapes for dot product")
-
-        def DotBackward0() -> None:
-            """Backpropagation implementation for matrix multiplication.
-
-            Computes gradients for `self` and `other` and propagates
-            them.
-            """
-            if None in (self.grad, other.grad):
-                self.grad = other.grad = Tensor(1, dtype)
-            self.grad += new_tensor.grad @ other
-            other.grad += self @ new_tensor.grad
-
-        new_tensor.grad_fn = Node(DotBackward0)
-        new_tensor.grad_fn.inputs = (self, other)
-        return new_tensor
+        return slowtorch.nn.functional.matmul(self, other)
 
     def __mod__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise modulo operation of the tensor with a
@@ -1000,34 +708,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        if isinstance(other, int):
-            new_tensor = Tensor(self.shape, self.dtype)
-            new_tensor[:] = [x % other for x in self._cdata]
-            return new_tensor
-        elif isinstance(other, float):
-            new_tensor = Tensor(self.shape, float64)
-            new_tensor[:] = [x % other for x in self._cdata]
-            return new_tensor
-        elif isinstance(other, Tensor):
-            dtype = (
-                float64
-                if self.dtype.name.startswith("float")
-                or other.dtype.name.startswith("float")
-                else int64
-            )
-            new_tensor = Tensor(self.shape, dtype)
-            if self.shape != other.shape:
-                raise ValueError(
-                    "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
-                )
-            new_tensor[:] = [x % y for x, y in zip(self._flat, other._flat)]
-            return new_tensor
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for %: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
+        return slowtorch.nn.functional.remainder(self, other)
 
     def __pow__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise exponentiation of the tensor with a
@@ -1045,51 +726,7 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor: Tensor
-        if isinstance(other, Number):
-            dtype = (
-                float64
-                if isinstance(other, float)
-                or self.dtype.name.startswith("float")
-                else int64
-            )
-            new_tensor = Tensor(
-                self.shape, dtype, requires_grad=self.requires_grad
-            )
-            new_tensor[:] = [data**other for data in self._cdata]
-        elif isinstance(other, Tensor):
-            dtype = (
-                float64
-                if self.dtype.name.startswith("float")
-                or other.dtype.name.startswith("float")
-                else int64
-            )
-            shape = broadcast_shapes(self.shape, other.shape)
-            self = self.broadcast_to(shape)
-            other = other.broadcast_to(shape)
-            requires_grad = self.requires_grad or other.requires_grad
-            new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-            new_tensor[:] = [x**y for x, y in zip(self._flat, other._flat)]
-        else:
-            raise TypeError(
-                f"Unsupported operand type(s) for **: {type(self).__name__!r} "
-                f"and {type(other).__name__!r}"
-            )
-
-        def PowBackward0() -> None:
-            """Backpropagation implementation for exponentiation.
-
-            Computes gradient for `self` and propagate it.
-            """
-            if self.nelement() > 1:
-                raise RuntimeError("grad can be created only for scalars")
-            if None in (self.grad,):
-                self.grad = Tensor(1, self.dtype)
-            self.grad += (other * self ** (other - 1)) * new_tensor.grad
-
-        new_tensor.grad_fn = Node(PowBackward0)
-        new_tensor.grad_fn.inputs = (self,)
-        return new_tensor
+        return slowtorch.nn.functional.pow(self, other)
 
     def __rpow__(self, other: Number | Tensor) -> Tensor:
         """Perform reverse exponentiation, delegating to `__pow__`.
@@ -1446,26 +1083,6 @@ class Tensor:
     def bool(self) -> Tensor:
         """Return tensor with bool dtype."""
         return self.to(bool)
-
-    def clone(self) -> Tensor:
-        """Return a deep copy of the tensor.
-
-        This method creates a new `Tensor` instance with the same data,
-        shape, and type as the original tensor. The copy is independent
-        of the original, meaning changes to the copy do not affect the
-        original tensor.
-
-        :return: A new tensor with the same data, shape, and type as the
-            original tensor.
-
-        .. note::
-
-            [1] This method ensures that both the data and metadata of
-                the tensor are duplicated.
-            [2] The `to` method is used internally for copying, ensuring
-                consistency and type fidelity.
-        """
-        return self.to(self.dtype)
 
     def _view(self) -> None | Tensor:
         """Create a new view of the tensor.
@@ -1984,15 +1601,25 @@ class Tensor:
                 node.grad_fn()
         self.grad = None
 
-    def max(self) -> Tensor:
-        """Return the maximum value of all elements along a given
-        dimension.
+    def clone(self) -> Tensor:
+        """Return a deep copy of the tensor.
 
-        :return: Return the maximum value as a tensor.
+        This method creates a new `Tensor` instance with the same data,
+        shape, and type as the original tensor. The copy is independent
+        of the original, meaning changes to the copy do not affect the
+        original tensor.
+
+        :return: A new tensor with the same data, shape, and type as the
+            original tensor.
+
+        .. note::
+
+            [1] This method ensures that both the data and metadata of
+                the tensor are duplicated.
+            [2] The `to` method is used internally for copying, ensuring
+                consistency and type fidelity.
         """
-        new_tensor = Tensor(1, self.dtype)
-        new_tensor[:] = max(self._flat)
-        return new_tensor
+        return slowtorch.nn.functional.clone(self)
 
     def sum(
         self,
@@ -2019,6 +1646,81 @@ class Tensor:
         """
         return slowtorch.nn.functional.sum(self, dim, keepdims)
 
+    def max(
+        self,
+        dim: None | builtins.int = None,
+        keepdims: builtins.bool = False,
+    ) -> Tensor:
+        """Return the maximum of elements in the tensor across a
+        specified dimension.
+
+        This method returns the maximum of all elements in the tensor if
+        no dimension is provided. If a dimension is specified, the method
+        reduces the tensor along the given dimension while optionally
+        retaining the reduced dimensions.
+
+        :param dim: The dimension along which to compute the maximum,
+            defaults to `None`. For `None`, the maximum is computed over
+            all elements of the tensor.
+        :param keepdims: A boolean indicating whether to retain the
+            reduced dimensions in the resulting tensor, defaults to
+            `False`.
+        :return: A new tensor containing the maximum of the specified
+            elements.
+        :raises ValueError: If the specified dimension is invalid.
+        """
+        return slowtorch.nn.functional.max(self, dim, keepdims)
+
+    def min(
+        self,
+        dim: None | builtins.int = None,
+        keepdims: builtins.bool = False,
+    ) -> Tensor:
+        """Return the minimum of elements in the tensor across a
+        specified dimension.
+
+        This method returns the minimum of all elements in the tensor if
+        no dimension is provided. If a dimension is specified, the method
+        reduces the tensor along the given dimension while optionally
+        retaining the reduced dimensions.
+
+        :param dim: The dimension along which to compute the minimum,
+            defaults to `None`. For `None`, the minimum is computed over
+            all elements of the tensor.
+        :param keepdims: A boolean indicating whether to retain the
+            reduced dimensions in the resulting tensor, defaults to
+            `False`.
+        :return: A new tensor containing the minimum of the specified
+            elements.
+        :raises ValueError: If the specified dimension is invalid.
+        """
+        return slowtorch.nn.functional.min(self, dim, keepdims)
+
+    def mean(
+        self,
+        dim: None | builtins.int = None,
+        keepdims: builtins.bool = False,
+    ) -> Tensor:
+        """Compute the mean of elements in the tensor across a specified
+        dimension.
+
+        This method computes the mean of all elements in the tensor if
+        no dimension is provided. If a dimension is specified, the method
+        reduces the tensor along the given dimension while optionally
+        retaining the reduced dimensions.
+
+        :param dim: The dimension along which to compute the mean,
+            defaults to `None`. For `None`, the mean is computed over
+            all elements of the tensor.
+        :param keepdims: A boolean indicating whether to retain the
+            reduced dimensions in the resulting tensor, defaults to
+            `False`.
+        :return: A new tensor containing the mean of the specified
+            elements.
+        :raises ValueError: If the specified dimension is invalid.
+        """
+        return slowtorch.nn.functional.mean(self, dim, keepdims)
+
     def exp(self) -> Tensor:
         """Perform element-wise exponentiation of the tensor.
 
@@ -2032,6 +1734,19 @@ class Tensor:
             exponentiation.
         """
         return slowtorch.nn.functional.exp(self)
+
+    def sqrt(self) -> Tensor:
+        """Perform element-wise square root of a tensor.
+
+        This function computes the square root of each element in the input
+        tensor. The result is returned as a new tensor, and gradients are
+        properly propagated during backpropagation.
+
+        :return: A new tensor containing the square root of each element
+            in the input tensor.
+        :raises ValueError: If the input tensor contains negative values.
+        """
+        return slowtorch.nn.functional.sqrt(self)
 
     def relu(self) -> Tensor:
         """Apply the Rectified Linear Unit (ReLU) function element-wise.
