@@ -66,6 +66,8 @@ __all__: list[str] = [
     "Parameter",
     "ReLU",
     "Sequential",
+    "Sigmoid",
+    "Tanh",
     "_Loss",
 ]
 
@@ -504,6 +506,79 @@ class ELU(Module):
             input tensor.
         """
         return slowtorch.nn.functional.elu(input, self.alpha)
+
+
+@set_module("slowtorch.nn.modules.activation")
+class Tanh(Module):
+    """Represents a Hyperbolic Tangent (Tanh) activation layer.
+
+    The Tanh activation function applies an element-wise transformation
+    to the input tensor, defined as::
+
+        tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
+
+    Tanh squashes all the values between the range of -1 to 1. This
+    operation is differentiable, and gradients are propagated.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the `Tanh` module."""
+        super().__init__()
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Tanh` object."""
+        return f"{type(self).__name__}()"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the Tanh activation layer.
+
+        The forward pass applies the Tanh function to the input tensor,
+        squashing out all the values between the range of -1 to 1.
+
+        :param input: The input tensor to be transformed, of arbitrary
+            shape.
+        :return: A new tensor where each element is the result of the
+            Tanh operation applied to the corresponding element of the
+            input tensor.
+        """
+        return slowtorch.nn.functional.tanh(input)
+
+
+@set_module("slowtorch.nn.modules.activation")
+class Sigmoid(Module):
+    """Represents a Sigmoid activation layer.
+
+    The Sigmoid activation function applies an element-wise
+    transformation to the input tensor, defined as::
+
+        sigmoid(x) = 1 / (1 + exp(-x))
+
+    Sigmoid squashes all the values between the range of 0 to 1. This
+    operation is differentiable, and gradients are propagated.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the `Sigmoid` module."""
+        super().__init__()
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Sigmoid` object."""
+        return f"{type(self).__name__}()"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the Sigmoid activation layer.
+
+        The forward pass applies the Sigmoid function to the input
+        tensor, squashing out all the values between the range of
+        0 to 1.
+
+        :param input: The input tensor to be transformed, of arbitrary
+            shape.
+        :return: A new tensor where each element is the result of the
+            Sigmoid operation applied to the corresponding element of the
+            input tensor.
+        """
+        return slowtorch.nn.functional.sigmoid(input)
 
 
 @set_module("slowtorch.nn.modules.loss")
