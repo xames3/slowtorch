@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Monday, January 27 2025
+Last updated on: Tuesday, January 28 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -57,12 +57,14 @@ from slowtorch._utils import set_module
 from slowtorch._variable_functions import uniform_
 
 __all__: list[str] = [
+    "ELU",
     "Flatten",
     "Identity",
     "Linear",
     "MSELoss",
     "Module",
     "Parameter",
+    "ReLU",
     "Sequential",
     "_Loss",
 ]
@@ -464,6 +466,44 @@ class ReLU(Module):
             input tensor.
         """
         return slowtorch.nn.functional.relu(input)
+
+
+@set_module("slowtorch.nn.modules.activation")
+class ELU(Module):
+    """Represents a Exponential Linear Unit (ELU) activation layer.
+
+    The ELU activation function applies an element-wise transformation
+    to the input tensor, defined as::
+
+        elu(x) = x if x >- 0 else alpha * (exp(x) - 1)
+
+    ELU is a function that tend to converge cost to zero faster and
+    produce more accurate results. This operation is differentiable,
+    and gradients are propagated only for positive elements.
+    """
+
+    def __init__(self, alpha: float = 1.0) -> None:
+        """Initialize the `ELU` module with an alpha value."""
+        super().__init__()
+        self.alpha = alpha
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `ELU` object."""
+        return f"{type(self).__name__}(alpha={self.alpha})"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the ELU activation layer.
+
+        The forward pass applies the ELU function to the input tensor,
+        zeroing out negative values and retaining positive values.
+
+        :param input: The input tensor to be transformed, of arbitrary
+            shape.
+        :return: A new tensor where each element is the result of the
+            ELU operation applied to the corresponding element of the
+            input tensor.
+        """
+        return slowtorch.nn.functional.elu(input, self.alpha)
 
 
 @set_module("slowtorch.nn.modules.loss")
