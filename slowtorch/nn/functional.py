@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Monday, January 27 2025
+Last updated on: Wednesday, January 29 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -987,8 +987,6 @@ def relu(input: Tensor) -> Tensor:
             [1] https://ml-cheatsheet.readthedocs.io/en/latest/
                 activation_functions.html#relu
         """
-        if input.nelement() > 1:
-            raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
             input.grad = Tensor(1, input.dtype)
         input.grad += (new_tensor > 0) * new_tensor.grad
@@ -1048,8 +1046,6 @@ def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
             [1] https://ml-cheatsheet.readthedocs.io/en/latest/
                 activation_functions.html#elu
         """
-        if input.nelement() > 1:
-            raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
             input.grad = Tensor(1, input.dtype)
         input.grad += (
@@ -1081,7 +1077,7 @@ def tanh(input: Tensor) -> Tensor:
     )
     if len(input.shape) == 1:
         new_tensor[:] = [
-            ((x := normal_exp(input[dim])) - (y := safe_exp(-input[dim])))
+            ((x := normal_exp(input[dim])) - (y := safe_exp(input[dim])))
             / (x + y)
             for dim in range(input.shape[0])
         ]
@@ -1090,8 +1086,7 @@ def tanh(input: Tensor) -> Tensor:
         for dim in itertools.product(N, N):
             try:
                 new_tensor[dim] = (
-                    (x := normal_exp(input[dim]))
-                    - (y := safe_exp(-input[dim]))
+                    (x := normal_exp(input[dim])) - (y := safe_exp(input[dim]))
                 ) / (x + y)
             except IndexError:
                 continue
@@ -1109,8 +1104,6 @@ def tanh(input: Tensor) -> Tensor:
             [1] https://ml-cheatsheet.readthedocs.io/en/latest/
                 activation_functions.html#tanh
         """
-        if input.nelement() > 1:
-            raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
             input.grad = Tensor(1, input.dtype)
         input.grad += (1.0 - new_tensor**2) * new_tensor.grad
@@ -1164,8 +1157,6 @@ def sigmoid(input: Tensor) -> Tensor:
             [1] https://ml-cheatsheet.readthedocs.io/en/latest/
                 activation_functions.html#sigmoid
         """
-        if input.nelement() > 1:
-            raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad,):
             input.grad = Tensor(1, input.dtype)
         input.grad -= (new_tensor * (1 - new_tensor)) * new_tensor.grad
@@ -1211,14 +1202,12 @@ def linear(
         Computes gradients for the `input`, `weight`, and `bias` tensors
         and propagates them backward through the computational graph.
         """
-        if input.nelement() > 1:
-            raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad, weight.grad, bias.grad):
             input.grad = weight.grad = bias.grad = Tensor(1, input.dtype)
-        input.grad += new_tensor.grad @ weight
-        weight.grad += new_tensor.grad.T @ input
+        input.grad -= new_tensor.grad @ weight
+        weight.grad -= new_tensor.grad.T @ input
         if bias is not None:
-            bias.grad += new_tensor.grad
+            bias.grad -= new_tensor.grad.sum(dim=0)
 
     new_tensor.grad_fn = Node(AddmmBackward0)
     new_tensor.grad_fn.inputs = (input, weight, bias)
@@ -1256,8 +1245,6 @@ def mse_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
         Computes gradients for the `input` and `target` tensors and
         propagates them backward through the computational graph.
         """
-        if input.nelement() > 1:
-            raise RuntimeError("grad can be created only for scalars")
         if None in (input.grad, target.grad):
             input.grad = target.grad = Tensor(1, input.dtype)
         grad = 2.0 / loss.nelement() if reduction == "mean" else 2.0
