@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Wednesday, January 29 2025
+Last updated on: Friday, January 31 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -1106,7 +1106,7 @@ def tanh(input: Tensor) -> Tensor:
         """
         if None in (input.grad,):
             input.grad = Tensor(1, input.dtype)
-        input.grad += (1.0 - new_tensor**2) * new_tensor.grad
+        input.grad -= (1.0 - new_tensor**2) * new_tensor.grad
 
     new_tensor.grad_fn = Node(TanhBackward0)
     new_tensor.grad_fn.inputs = (input,)
@@ -1204,10 +1204,10 @@ def linear(
         """
         if None in (input.grad, weight.grad, bias.grad):
             input.grad = weight.grad = bias.grad = Tensor(1, input.dtype)
-        input.grad -= new_tensor.grad @ weight
-        weight.grad -= new_tensor.grad.T @ input
+        input.grad += new_tensor.grad @ weight
+        weight.grad += new_tensor.grad.T @ input
         if bias is not None:
-            bias.grad -= new_tensor.grad.sum(dim=0)
+            bias.grad += new_tensor.grad.sum(dim=0)
 
     new_tensor.grad_fn = Node(AddmmBackward0)
     new_tensor.grad_fn.inputs = (input, weight, bias)
