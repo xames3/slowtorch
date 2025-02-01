@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Wednesday, January 29 2025
+Last updated on: Friday, January 31 2025
 
 Tensor object.
 
@@ -299,7 +299,7 @@ class Tensor:
         else:
             element = repr(self._cdata[offset])
             if "." in element and element.endswith(".0"):
-                element = f"{element[:-1]:>{whitespace}}"
+                element = f"{element[:-1]:<0{whitespace}}"
             else:
                 element = f"{element:>{whitespace}}"
             formatted += element
