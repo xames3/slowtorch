@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Tuesday, January 28 2025
+Last updated on: Friday, January 31 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -104,6 +104,18 @@ class Parameter(Tensor):
         for key, value in data.__dict__.items():
             setattr(self, key, value)
 
+    @property
+    def data(self) -> Tensor:
+        """Return the underlying tensor data."""
+        return self
+
+    @data.setter
+    def data(self, value: Tensor) -> None:
+        """Ensure that setting `data` updates the parameter in-place."""
+        if not isinstance(value, Tensor):
+            raise TypeError("Parameter data must be a tensor")
+        self._cdata[:] = value._cdata
+
     def __repr__(self) -> str:
         """Return a string representation of `Parameter` object."""
         return f"Parameter containing:\n{super().__repr__()}"
@@ -146,11 +158,11 @@ class Module:
             self._parameters[name] = value
         super().__setattr__(name, value)
 
-    def __call__(self, input: Tensor) -> Tensor:
+    def __call__(self, *input: t.Any, **kwargs: t.Any) -> Tensor:
         """Invoke the `forward` method."""
-        return self.forward(input)
+        return self.forward(*input, **kwargs)
 
-    def forward(self, input: Tensor) -> Tensor:
+    def forward(self, *input: t.Any, **kwargs: t.Any) -> Tensor:
         """Define the computation performed at every call.
 
         Should be overridden by all subclasses.
@@ -199,7 +211,7 @@ class Module:
                 if set_to_none:
                     param.grad = None
                 else:
-                    param.grad = Tensor((1,))
+                    param.grad = Tensor(1)
 
     def train(self, mode: bool = True) -> Module:
         """Set the module and its submodules to training mode.
@@ -647,7 +659,7 @@ class MSELoss(_Loss):
         """Initialize `MSELoss` instance with a reduction strategy."""
         super().__init__(size_average, reduce, reduction)
 
-    def forward(self, input: Tensor, target: Tensor) -> Tensor:  # type: ignore
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the MSE loss between `input` and `target` tensors.
 
         This method calculates the squared differences between the input
