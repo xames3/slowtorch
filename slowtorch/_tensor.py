@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, January 27 2025
+Last updated on: Wednesday, January 29 2025
 
 Tensor object.
 
@@ -1274,12 +1274,13 @@ class Tensor:
         :return: A new tensor view.
         """
         new_tensor = self.__class__.__new__(self.__class__)
-        new_tensor._shape = shape
-        new_tensor._strides = strides
+        new_tensor._base = self._base
         new_tensor._cdata = self._cdata
         new_tensor._dtype = self._dtype
-        new_tensor._offset = self._offset
         new_tensor._itemsize = self._itemsize
+        new_tensor._offset = self._offset
+        new_tensor._shape = shape
+        new_tensor._strides = strides
         new_tensor.device = self.device
         new_tensor.requires_grad = self.requires_grad
         return new_tensor
