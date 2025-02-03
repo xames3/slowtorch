@@ -2,6 +2,12 @@
 .. Created on: Thursday, October 10 2024
 .. Last updated on: Monday, February 03 2025
 
+.. figure:: https://github.com/xames3/slowtorch/blob/main/slowtorch-logo.png
+    :alt: SlowTorch Logo
+
+    Logo generated using `FLUX.1 <https://huggingface.co/spaces/
+    black-forest-labs/FLUX.1-schnell>`_.
+
 ===============================================================================
 SlowTorch
 ===============================================================================
