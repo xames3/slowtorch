@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, January 31 2025
+Last updated on: Monday, March 03 2025
 
 Tensor object.
 
@@ -12,7 +12,7 @@ This module provides the foundational classes and functions for tensor
 operations in SlowTorch. It defines the `Tensor` class and supporting
 utility like the `tensor` function to create and manipulate tensors.
 SlowTorch aims to mimic PyTorch's tensor behavior while implementing key
-functionalities from scratch to foster learning and customization.
+functionalities from scratch to foster learning and customisation.
 
 The `Tensor` class acts as the primary data structure for
 multidimensional arrays and supports features like automatic
@@ -21,7 +21,7 @@ is a factory function to create tensors from nested data structures. It
 infers tensor shape, data type, and supports optional device
 specification and gradient requirements. Designed with flexibility,
 efficiency, and modularity in mind, the `Tensor` class aims to replicate
-and innovate upon the core features of PyTorch tensors while emphasizing
+and innovate upon the core features of PyTorch tensors while emphasising
 a Python-standard-library-only approach. Additionally, the class
 introduces a Pythonic, educational perspective, making it suitable for
 learning and experimentation with tensor mechanics without relying on
@@ -41,7 +41,7 @@ The `Tensor` implementation draws inspiration from PyTorch's
 architecture but deliberately simplifies and reimagines certain aspects
 for educational purposes and to meet the constraints of pure Python. By
 eschewing C or Cython extensions, the `Tensor` class offers an
-accessible implementation that emphasizes algorithmic clarity over raw
+accessible implementation that emphasises algorithmic clarity over raw
 performance.
 
 In addition to the core `Tensor` functionality, this module introduces
@@ -59,11 +59,14 @@ from __future__ import annotations
 
 import builtins
 import ctypes
+import pickle
+import types
 import typing as t
 from collections.abc import Iterable
 
 import slowtorch
 from slowtorch import function_dispatch
+from slowtorch._types import FILE_LIKE
 from slowtorch._types import ArrayLike
 from slowtorch._types import Number
 from slowtorch._utils import Device
@@ -158,7 +161,7 @@ class Node:
     inputs: tuple[Tensor] = ()
 
     def __init__(self, backward: None | t.Callable[..., t.Any] = None) -> None:
-        """Initialize a `Node` instance."""
+        """Initialise a `Node` instance."""
         self.backward = backward
         self.name = backward.__name__ if backward else None
 
@@ -212,7 +215,7 @@ class Tensor:
         offset: t.SupportsIndex = 0,
         strides: None | Size | tuple[int, ...] = None,
     ) -> None:
-        """Initialize a `tensor` object from provided shape."""
+        """Initialise a `tensor` object from provided shape."""
         if device is not None and device.type != "cpu":
             raise RuntimeError(
                 f"{type(self).__qualname__} supports only device type: cpu"
@@ -516,7 +519,7 @@ class Tensor:
                     self.device,
                     self.requires_grad,
                 )
-            array_like = value.flat()
+            array_like = value.storage()
         if new_tensor.nelement() != len(array_like):
             raise ValueError(
                 "Number of elements in the value doesn't match the shape"
@@ -897,7 +900,7 @@ class Tensor:
 
     @property
     def is_quantized(self) -> t.Literal[False]:
-        """Return True if tensor is quantized else False."""
+        """Return True if tensor is quantised else False."""
         return False
 
     @property
@@ -994,7 +997,7 @@ class Tensor:
                 for dim in range(sub_tensor.shape[0]):
                     sub_tensors.append(sub_tensor[dim])
 
-    def flat(self) -> list[Number]:
+    def storage(self) -> list[Number]:
         """Flatten the tensor and return all its elements in a list.
 
         This method traverses through the tensor and collects its
@@ -1207,7 +1210,7 @@ class Tensor:
             raise ValueError("max must have same shape as the input tensor")
         if out is None:
             out = Tensor(self.shape, self.dtype)
-        F = self.flat()
+        F = self.storage()
         R = range(len(F))
         if isinstance(min, Tensor) and isinstance(max, Tensor):
             L = [py_min(max._flat[_], py_max(min._flat[_], F[_])) for _ in R]
@@ -1820,7 +1823,7 @@ def tensor(
 ) -> Tensor:
     """Create a tensor from the input data.
 
-    This function initializes a tensor with a given data array,
+    This function initialises a tensor with a given data array,
     optionally specifying its data type, device, and gradient
     requirement.
 
@@ -1858,3 +1861,27 @@ def tensor(
     new_tensor = Tensor(size, dtype, device, requires_grad)
     new_tensor[:] = array_like
     return new_tensor
+
+
+@function_dispatch
+def save(
+    obj: object,
+    f: FILE_LIKE,
+    pickle_module: types.ModuleType = pickle,
+    pickle_protocol: t.Literal[2] = 2,
+) -> None:
+    """Save an object to disk file."""
+    with open(f, "wb") as opened_file:
+        pickle_module.dump(obj, opened_file, protocol=pickle_protocol)
+
+
+@function_dispatch
+def load(
+    f: FILE_LIKE,
+    pickle_module: types.ModuleType = pickle,
+    weights_only: None | builtins.bool = None,
+) -> t.Any:
+    """Load an object saved from a file."""
+    with open(f, "rb") as opened_file:
+        output = pickle_module.load(f)
+    return output

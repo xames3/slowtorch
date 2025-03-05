@@ -4,19 +4,19 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Friday, January 31 2025
+Last updated on: Monday, March 03 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
 enables users to create custom models by leveraging a modular and
 extensible architecture where components like layers and parameters are
-automatically registered and optimized during training.
+automatically registered and optimised during training.
 
 The `Module` class serves as the base class for all neural network
 components. It automatically registers submodules and learnable
 parameters when assigned as attributes. It also provides mechanisms for
 forward computation, parameter iteration, and mode switching (training
-vs. evaluation). Whereas, the `Parameter` class is a specialized
+vs. evaluation). Whereas, the `Parameter` class is a specialised
 subclass of `Tensor` designed to represent learnable parameters, such as
 weights and biases. It automatically tracks gradients and integrates
 seamlessly with the `Module` hierarchy.
@@ -74,18 +74,18 @@ __all__: list[str] = [
 
 @set_module("slowtorch.nn.parameter")
 class Parameter(Tensor):
-    """A specialized subclass of `Tensor` designed to represent
+    """A specialised subclass of `Tensor` designed to represent
     parameters in modules. A `Parameter` is typically used to define
     learnable weights within a neural network or other computational
     models.
 
     Unlike regular `Tensor` objects, `Parameter` is automatically
     registered as part of a model when assigned as an attribute of a
-    module. This registration facilitates optimization and gradient
+    module. This registration facilitates optimisation and gradient
     tracking during training.
 
     :param data: The underlying tensor data. If not provided, an
-        uninitialized tensor of shape `(1,)` is created, defaults to
+        uninitialised tensor of shape `(1,)` is created, defaults to
         `None`.
     :param requires_grad: A flag indicating whether gradients should
         be computed for this parameter during backpropagation, defaults
@@ -97,7 +97,7 @@ class Parameter(Tensor):
         data: None | Tensor = None,
         requires_grad: bool = True,
     ) -> None:
-        """Initialize a `Parameter` instance with optional data."""
+        """Initialise a `Parameter` instance with optional data."""
         if data is None:
             data = empty(1, requires_grad=requires_grad)
         data.requires_grad = requires_grad
@@ -132,7 +132,7 @@ class Module:
     """
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
-        """Initialize `Module` instance with optional arguments."""
+        """Initialise `Module` instance with optional arguments."""
         self.args = args
         self.kwargs = kwargs
         self.training: bool = True
@@ -245,7 +245,7 @@ class Sequential(Module):
     """
 
     def __init__(self, *args: Module) -> None:
-        """Initialize the `Sequential` container with modules."""
+        """Initialise the `Sequential` container with modules."""
         super().__init__()
         self._modules = OrderedDict()
         if len(args) == 1 and isinstance(args[0], OrderedDict):
@@ -288,7 +288,7 @@ class Flatten(Module):
     """Flatten a contiguous range of dims into a tensor."""
 
     def __init__(self) -> None:
-        """Initialize `Flatten` instance with `Module` base class."""
+        """Initialise `Flatten` instance with `Module` base class."""
         super().__init__()
 
     def __repr__(self) -> str:
@@ -308,7 +308,7 @@ class Identity(Module):
     """
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
-        """Initialize `Identity` instance."""
+        """Initialise `Identity` instance."""
         super().__init__()
 
     def __repr__(self) -> str:
@@ -373,7 +373,7 @@ class Linear(Module):
         device: DeviceType = None,
         dtype: None | Dtype = None,
     ) -> None:
-        """Initialize the `Linear` module with the specified input and
+        """Initialise the `Linear` module with the specified input and
         output feature sizes, and optionally include a bias term.
         """
         super().__init__()
@@ -408,9 +408,9 @@ class Linear(Module):
 
     def reset_parameters(self) -> None:
         """Reset the parameters of the layer using uniform
-        initialization.
+        initialisation.
 
-        Weights and Bias, if present are initialized from::
+        Weights and Bias, if present are initialised from::
 
             U(-k, k), where k = 1 / sqrt(in_features)
         """
@@ -460,7 +460,7 @@ class ReLU(Module):
     """
 
     def __init__(self) -> None:
-        """Initialize the `ReLU` module."""
+        """Initialise the `ReLU` module."""
         super().__init__()
 
     def __repr__(self) -> str:
@@ -497,7 +497,7 @@ class ELU(Module):
     """
 
     def __init__(self, alpha: float = 1.0) -> None:
-        """Initialize the `ELU` module with an alpha value."""
+        """Initialise the `ELU` module with an alpha value."""
         super().__init__()
         self.alpha = alpha
 
@@ -534,7 +534,7 @@ class Tanh(Module):
     """
 
     def __init__(self) -> None:
-        """Initialize the `Tanh` module."""
+        """Initialise the `Tanh` module."""
         super().__init__()
 
     def __repr__(self) -> str:
@@ -570,7 +570,7 @@ class Sigmoid(Module):
     """
 
     def __init__(self) -> None:
-        """Initialize the `Sigmoid` module."""
+        """Initialise the `Sigmoid` module."""
         super().__init__()
 
     def __repr__(self) -> str:
@@ -597,7 +597,7 @@ class Sigmoid(Module):
 class _Loss(Module):
     """Base class for all loss functions.
 
-    This class provides a common interface for initializing loss
+    This class provides a common interface for initialising loss
     functions with configurable reduction strategies. Subclasses can
     implement specific loss computation logic while inheriting the
     reduction handling from this base.
@@ -621,7 +621,7 @@ class _Loss(Module):
         reduce: bool = None,
         reduction: str = "mean",
     ) -> None:
-        """Initialize `_Loss` instance with a reduction strategy."""
+        """Initialise `_Loss` instance with a reduction strategy."""
         super().__init__()
         if size_average is not None and reduce:
             pass
@@ -656,7 +656,7 @@ class MSELoss(_Loss):
         reduce: bool = None,
         reduction: str = "mean",
     ) -> None:
-        """Initialize `MSELoss` instance with a reduction strategy."""
+        """Initialise `MSELoss` instance with a reduction strategy."""
         super().__init__(size_average, reduce, reduction)
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
@@ -664,7 +664,7 @@ class MSELoss(_Loss):
 
         This method calculates the squared differences between the input
         and target tensors, and applies the reduction strategy specified
-        during initialization.
+        during initialisation.
 
         :param input: The predicted tensor.
         :param target: The target tensor.

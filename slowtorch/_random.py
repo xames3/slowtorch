@@ -4,7 +4,7 @@ SlowTorch Random API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Monday, January 13 2025
+Last updated on: Monday, March 03 2025
 
 This module implements pseudo-random number generators (PRNGs or RNGs)
 with ability to draw samples from a variety of probability
@@ -34,7 +34,7 @@ class Generator:
     __module__: str = "slowtorch._C"
 
     def __init__(self, device: DeviceType = None) -> None:
-        """Initialize a `Generator` instance with device."""
+        """Initialise a `Generator` instance with device."""
         self.device = device
         self.internal = random.Random()
         self._seed = self.internal.randint(0, 999)

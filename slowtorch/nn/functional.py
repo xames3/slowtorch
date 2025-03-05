@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Friday, January 31 2025
+Last updated on: Monday, March 03 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -20,7 +20,7 @@ Activation functions are crucial for introducing non-linearity into
 neural networks, enabling them to learn complex patterns in data. The
 functional module includes implementations of popular activation
 functions. Loss functions measure the difference between the model
-outputs and the target values, guiding the optimization process. The
+outputs and the target values, guiding the optimisation process. The
 modular and functional design of the functional module makes it easy to
 extend with new operations as needed. Users can contribute additional
 functions following the same pattern, enhancing the utility and

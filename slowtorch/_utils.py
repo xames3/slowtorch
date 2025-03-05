@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Sunday, January 26 2025
+Last updated on: Monday, March 03 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -12,7 +12,7 @@ encapsulate common functionality and helpers that simplify the
 development of the overall library, promoting code reuse and modular
 design. The `utils` module includes utility classes and objects that are
 frequently used across the SlowTorch framework, such as custom
-decorators and helper functions. By centralizing frequently used
+decorators and helper functions. By centralising frequently used
 utilities, the module aims to maintain a clean and modular structure,
 enabling easy maintenance, extensibility, and testability.
 
@@ -100,7 +100,7 @@ class Device:
     __qualname__: str = "device"
 
     def __init__(self, type: str = "cpu", index: int = 0) -> None:
-        """Initialize a new `Device` object with default index."""
+        """Initialise a new `Device` object with default index."""
         self.type = type
         self.index = index
 
@@ -145,7 +145,7 @@ class Dtype:
         data: t.Any,
         value: Number | bool,
     ) -> None:
-        """Initialize a new `Dtype` object with name and value."""
+        """Initialise a new `Dtype` object with name and value."""
         self.name = name
         self.itemsize = int(short[-1])
         self.data = data
@@ -170,7 +170,7 @@ class Size(tuple[int, ...]):
     """
 
     def __init__(self, iterable: tuple[int, ...]) -> None:
-        """Initialize a `Size` instance with some iterable."""
+        """Initialise a `Size` instance with some iterable."""
         if not all(isinstance(dim, int) and dim >= 0 for dim in iterable):
             raise ValueError("Dimensions must be non-negative")
         self.iterable = iterable

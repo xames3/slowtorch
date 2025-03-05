@@ -1,6 +1,6 @@
 .. Author: Akshay Mestry <xa@mes3.dev>
 .. Created on: Thursday, October 10 2024
-.. Last updated on: Monday, February 03 2025
+.. Last updated on: Monday, March 03 2025
 
 .. figure:: https://github.com/xames3/slowtorch/blob/main/slowtorch-logo.png
     :alt: SlowTorch Logo
@@ -91,7 +91,7 @@ Tensor Creation Ops
       tensor([[1, 3], 
               [2, 3]])
 
-- **slowtorch.empty.** Create an uninitialized tensor of the given shape.
+- **slowtorch.empty.** Create an uninitialised tensor of the given shape.
 
   .. code-block:: python
   
@@ -161,8 +161,8 @@ Autograd Mechanics
       >>> c.grad
       tensor(3.0, grad_fn=<AddBackward0>)
 
-- **Specialized Backward Functions.** Like PyTorch, SlowTorch also implements
-  some specialized `backward <https://pytorch.org/docs/stable/generated/torch.
+- **Specialised Backward Functions.** Like PyTorch, SlowTorch also implements
+  some specialised `backward <https://pytorch.org/docs/stable/generated/torch.
   autograd.backward.html#torch.autograd.backward>`_ functions for
   backpropagation. These functions are mainly for representing the derivative
   or gradient calculations of the said functions.

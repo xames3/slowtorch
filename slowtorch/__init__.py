@@ -4,7 +4,7 @@ SlowTorch
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, January 16 2025
+Last updated on: Monday, March 03 2025
 
 SlowTorch is yet another personal pet-project of mine where I tried and
 implemented the basic and bare-bones functionality of PyTorch just using
@@ -48,7 +48,7 @@ __all__: list[str] = [
 
 _T = t.TypeVar("_T")
 
-version: str = "2025.01.31"
+version: str = "1.3.2025"
 
 
 def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:

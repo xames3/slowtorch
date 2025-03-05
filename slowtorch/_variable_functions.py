@@ -4,9 +4,9 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Tuesday, January 21 2025
+Last updated on: Monday, March 03 2025
 
-This module provides essential tensor creation and initialization
+This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
 designed to construct and populate `Tensor` objects with various
 patterns and values, mimicking the functionality of PyTorch's core
@@ -14,7 +14,7 @@ tensor creation routines.
 
 This module serves as the foundation for generating tensors with specific
 sizes, patterns, and values. These utilities are essential for
-initializing tensors, enabling users to quickly prototype and perform
+initialising tensors, enabling users to quickly prototype and perform
 computations without the need for manual data entry. Inspired by
 PyTorch's tensor creation APIs, this module brings similar functionality
 to `slowtorch` with a focus on educational clarity, pure Python
@@ -35,20 +35,20 @@ guiding its implementation include::
       with PyTorch.
     - Flexibility: Support for multiple data types, sizes, and device
       layouts.
-    - Simplicity: Implementations prioritize readability and modularity,
+    - Simplicity: Implementations prioritise readability and modularity,
       enabling users to explore and extend functionality with ease.
     - Educational Value: As part of the `slowtorch` project, this module
-      emphasizes the learning of tensor mechanics and API design.
+      emphasises the learning of tensor mechanics and API design.
 
 The tensor creation functions in this module are ideal for::
 
-    - Initializing tensors for numerical computations.
+    - Initialising tensors for numerical computations.
     - Creating test datasets for algorithm development.
     - Prototyping applications that require structured numerical data.
     - Exploring the mechanics of multidimensional tensor creation in
       Python.
 
-The implementations in this module are not optimized for performance and
+The implementations in this module are not optimised for performance and
 are intended for learning and exploratory purposes. For production-grade
 numerical computation, consider using PyTorch directly.
 """
@@ -286,13 +286,13 @@ def empty(
     device: DeviceType = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    """Create a new tensor without initializing its values.
+    """Create a new tensor without initialising its values.
 
     The `empty` function returns a new `Tensor` with the specified
     size, data type, and device. The contents of the tensor are
-    uninitialized and contain random data, in theory but practically,
+    uninitialised and contain random data, in theory but practically,
     it fills them with zeros because of `ctypes`. This function is useful
-    for performance-critical applications where immediate initialization
+    for performance-critical applications where immediate initialisation
     is not required.
 
     :param size: Dimensions of the tensor.
@@ -301,12 +301,12 @@ def empty(
         `None`.
     :param requires_grad: Boolean if autograd should record operations
         on the returned tensor, defaults to `False`.
-    :return: An uninitialized tensor with the specified properties.
+    :return: An uninitialised tensor with the specified properties.
 
     .. note::
 
         [1] The contents of the returned tensor are random and should
-            not be used without proper initialization.
+            not be used without proper initialisation.
     """
     if len(size) == 1:
         shape = size[0]
@@ -341,7 +341,7 @@ def zeros(
     """Create a new tensor filled with zeros.
 
     The `zeros` function creates an tensor with the specified size,
-    data type, and device, initializing all its elements to zero.
+    data type, and device, initialising all its elements to zero.
     This function is particularly useful for scenarios requiring a blank
     tensor with known dimensions and type, where all elements must
     initially be zero.
@@ -352,7 +352,7 @@ def zeros(
         `None`.
     :param requires_grad: Boolean if autograd should record operations
         on the returned tensor, defaults to `False`.
-    :return: An initialized tensor with the values set to 0.
+    :return: An initialised tensor with the values set to 0.
     """
     new_tensor = empty(
         *size,
@@ -407,7 +407,7 @@ def ones(
     """Create a new tensor filled with ones.
 
     The `ones` function creates an tensor with the specified size,
-    data type, and device, initializing all its elements to one. This
+    data type, and device, initialising all its elements to one. This
     function is particularly useful for scenarios requiring a blank
     tensor with known dimensions and type, where all elements must
     initially be one.
@@ -418,7 +418,7 @@ def ones(
         `None`.
     :param requires_grad: Boolean if autograd should record operations
         on the returned tensor, defaults to `False`.
-    :return: An initialized tensor with the values set to 1.
+    :return: An initialised tensor with the values set to 1.
     """
     new_tensor = empty(
         *size,
@@ -472,7 +472,7 @@ def full(
     """Create a new tensor filled with `fill_value`.
 
     The `full` function creates an tensor with the specified size,
-    data type, and device, initializing all its elements to `fill_value`.
+    data type, and device, initialising all its elements to `fill_value`.
     This function is particularly useful for scenarios requiring a blank
     tensor with known dimensions and type, where all elements must
     initially be `fill_value`.
@@ -484,7 +484,7 @@ def full(
         `None`.
     :param requires_grad: Boolean if autograd should record operations
         on the returned tensor, defaults to `False`.
-    :return: An initialized tensor with the values set to `fill_value`.
+    :return: An initialised tensor with the values set to `fill_value`.
     """
     new_tensor = empty(
         *size,
