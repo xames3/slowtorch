@@ -4,7 +4,7 @@ SlowTorch Types API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Tuesday, April 01 2025
 
 This module defines and provides aliases for all simple and composite
 types that are used throughout the SlowTorch framework. The types defined
@@ -35,14 +35,14 @@ __all__: list[str] = [
     "VoidDTypeLike",
 ]
 
-Number: t.TypeAlias = int | float | bool
+Number = int | float | bool
 ArrayLike = t.TypeVar("ArrayLike")
-DTypeLikeNested: t.TypeAlias = t.Any
-VoidDTypeLike: t.TypeAlias = (
+DTypeLikeNested = t.Any
+VoidDTypeLike = (
     tuple[DTypeLikeNested, int]
     | tuple[DTypeLikeNested]
     | list[t.Any]
     | tuple[DTypeLikeNested, DTypeLikeNested]
 )
-DTypeLike: t.TypeAlias = None | type[t.Any] | str | VoidDTypeLike
-FILE_LIKE: t.TypeAlias = str | os.PathLike | t.BinaryIO | t.IO[bytes]
+DTypeLike = None | type[t.Any] | str | VoidDTypeLike
+FILE_LIKE = int | str | bytes | os.PathLike[str] | os.PathLike[bytes]
