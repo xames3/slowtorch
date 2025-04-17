@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Tuesday, April 01 2025
 
 Tensor object.
 
@@ -70,7 +70,6 @@ from slowtorch._types import FILE_LIKE
 from slowtorch._types import ArrayLike
 from slowtorch._types import Number
 from slowtorch._utils import Device
-from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
 from slowtorch._utils import calculate_shape_from_data
@@ -97,6 +96,8 @@ __all__: list[str] = [
     "uint64",
     "uint8",
 ]
+
+DeviceType = None | str | int | Device
 
 py_min = min
 py_max = max
@@ -265,11 +266,11 @@ class Tensor:
         Buffer = self._dtype.data * buffersize
         if buffer is None:
             if not isinstance(Buffer, str):
-                self._cdata = Buffer()
+                self.storage = Buffer()
         elif isinstance(buffer, ctypes.Array):
-            self._cdata = Buffer.from_address(ctypes.addressof(buffer))
+            self.storage = Buffer.from_address(ctypes.addressof(buffer))
         else:
-            self._cdata = Buffer.from_buffer(buffer)
+            self.storage = Buffer.from_buffer(buffer)
         self.data = self
         self.grad_fn: Node = Node()
         self.grad: Tensor = None
@@ -285,7 +286,7 @@ class Tensor:
     ) -> str:
         """Method to mimic PyTorch's tensor as close as possible."""
         if only:
-            return str(self._cdata[0])
+            return str(self.storage[0])
         indent = min(2, max(0, (self.ndim - axis - 1)))
         if axis < len(self.shape):
             formatted += "["
@@ -300,7 +301,7 @@ class Tensor:
                     formatted += ", "
             formatted += "]"
         else:
-            element = repr(self._cdata[offset])
+            element = repr(self.storage[offset])
             if "." in element and element.endswith(".0"):
                 element = f"{element[:-1]:<0{whitespace}}"
             else:
@@ -311,9 +312,9 @@ class Tensor:
     def __repr__(self) -> str:
         """Return a string representation of `Tensor` object."""
         whitespace = max(
-            len(str(self._cdata[idx])) for idx in range(self.nelement())
+            len(str(self.storage[idx])) for idx in range(self.nelement())
         )
-        only = len(self._cdata) == 1
+        only = len(self.storage) == 1
         formatted = self.format_repr("", 0, self._offset, 7, whitespace, only)
         extra: str = ""
         if self.requires_grad:
@@ -457,7 +458,7 @@ class Tensor:
         """
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
-            return self._cdata[offset]
+            return self.storage[offset]
         return Tensor(
             shape,
             self.dtype,
@@ -496,7 +497,7 @@ class Tensor:
         """
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
-            self._cdata[offset] = safe_round(value, self._print_opts.precision)
+            self.storage[offset] = safe_round(value, self._print_opts.precision)
             return
         new_tensor = Tensor(
             shape,
@@ -519,7 +520,7 @@ class Tensor:
                     self.device,
                     self.requires_grad,
                 )
-            array_like = value.storage()
+            array_like = value.storage
         if new_tensor.nelement() != len(array_like):
             raise ValueError(
                 "Number of elements in the value doesn't match the shape"
@@ -537,7 +538,7 @@ class Tensor:
                     else:
                         element = round(element, self._print_opts.precision)
                         converted.append(element)
-                sub_tensor._cdata[
+                sub_tensor.storage[
                     slice(
                         sub_tensor._offset,
                         sub_tensor._offset + sub_tensor.nelement() * step_size,
@@ -556,12 +557,12 @@ class Tensor:
             return self
         if len(size) < len(self.shape):
             raise ValueError(f"Cannot broadcast {self.shape} to {size}")
-        data = self._cdata[:]
+        data = self.storage[:]
         for idx in range(len(size)):
             if idx >= len(self.shape) or self.shape[idx] == 1:
                 data = data * size[idx]
         new_tensor = Tensor(size, self.dtype, requires_grad=self.requires_grad)
-        new_tensor._cdata = data
+        new_tensor.storage = data
         return new_tensor
 
     def __add__(self, other: Number | Tensor) -> Tensor:
@@ -740,11 +741,11 @@ class Tensor:
         return self.__pow__(other)
 
     def __neg__(self) -> Tensor:
-        """Perform negation, delegating to `__mul__`.
+        """Perform negation on the input tensor.
 
         :return: The result of the negation.
         """
-        return self.__mul__(-1)
+        return slowtorch.nn.functional.neg(self)
 
     def __lt__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise less-than operation of the tensor with a
@@ -764,7 +765,7 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x < other for x in self._cdata]
+            new_tensor[:] = [x < other for x in self.storage]
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -797,7 +798,7 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x > other for x in self._cdata]
+            new_tensor[:] = [x > other for x in self.storage]
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -830,7 +831,7 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x <= other for x in self._cdata]
+            new_tensor[:] = [x <= other for x in self.storage]
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -863,7 +864,7 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x >= other for x in self._cdata]
+            new_tensor[:] = [x >= other for x in self.storage]
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
@@ -881,7 +882,7 @@ class Tensor:
     @property
     def buffer(self) -> t.Any:
         """Return the memory buffer holding the tensor elements."""
-        return self._cdata
+        return self.storage
 
     @property
     def base(self) -> None | t.Any:
@@ -985,7 +986,7 @@ class Tensor:
             sub_tensor = sub_tensors.pop(0)
             step_size = get_step(sub_tensor)
             if step_size:
-                for dim in self._cdata[
+                for dim in self.storage[
                     slice(
                         sub_tensor._offset,
                         sub_tensor._offset + sub_tensor.nelement() * step_size,
@@ -1014,7 +1015,7 @@ class Tensor:
             sub_tensor = sub_tensors.pop(0)
             step_size = get_step(sub_tensor)
             if step_size:
-                array_like += self._cdata[
+                array_like += self.storage[
                     slice(
                         sub_tensor._offset,
                         sub_tensor._offset + sub_tensor.nelement() * step_size,
@@ -1163,7 +1164,7 @@ class Tensor:
         """
         comprehensions = 0
         shape = list(self.shape).copy()
-        comprehension = list(self._cdata).copy()
+        comprehension = list(self.storage).copy()
         skip = self.nelement() // shape[-1]
         while comprehensions < len(self.shape) - 1:
             comprehension = [
@@ -1210,7 +1211,7 @@ class Tensor:
             raise ValueError("max must have same shape as the input tensor")
         if out is None:
             out = Tensor(self.shape, self.dtype)
-        F = self.storage()
+        F = self.storage
         R = range(len(F))
         if isinstance(min, Tensor) and isinstance(max, Tensor):
             L = [py_min(max._flat[_], py_max(min._flat[_], F[_])) for _ in R]
@@ -1278,7 +1279,7 @@ class Tensor:
         """
         new_tensor = self.__class__.__new__(self.__class__)
         new_tensor._base = self._base
-        new_tensor._cdata = self._cdata
+        new_tensor.storage = self.storage
         new_tensor._dtype = self._dtype
         new_tensor._itemsize = self._itemsize
         new_tensor._offset = self._offset
@@ -1338,7 +1339,7 @@ class Tensor:
             returning the output, defaults to `True`.
         :return: Tensor with list of unique elements.
         """
-        size = len((unique := set(self._cdata)))
+        size = len((unique := set(self.storage)))
         new_tensor = Tensor(
             (size,),
             self.dtype,
@@ -1883,5 +1884,5 @@ def load(
 ) -> t.Any:
     """Load an object saved from a file."""
     with open(f, "rb") as opened_file:
-        output = pickle_module.load(f)
+        output = pickle_module.load(opened_file)
     return output

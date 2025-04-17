@@ -67,7 +67,7 @@ disable_error_code = [ "assignment", "method-assign", "name-defined" ]
 
 [tool.tox]
 requires = [ "tox>=4" ]
-envlist = [ "py312", "py311", "py310" ]
+envlist = [ "py313", "py312", "py311", "py310" ]
 package = "editable"
 
 [tool.tox.env_run_base]

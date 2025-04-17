@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Tuesday, April 01 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -63,9 +63,9 @@ import slowtorch
 from slowtorch import function_dispatch
 from slowtorch._random import Generator
 from slowtorch._random import default_generator
+from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
 from slowtorch._types import Number
-from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
 

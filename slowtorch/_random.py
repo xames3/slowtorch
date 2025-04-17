@@ -4,7 +4,7 @@ SlowTorch Random API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Tuesday, April 01 2025
 
 This module implements pseudo-random number generators (PRNGs or RNGs)
 with ability to draw samples from a variety of probability
@@ -16,9 +16,9 @@ from __future__ import annotations
 import random
 
 from slowtorch import function_dispatch
+from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
 from slowtorch._tensor import tensor
-from slowtorch._utils import DeviceType
 
 
 @function_dispatch

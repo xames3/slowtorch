@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Tuesday, April 01 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -50,8 +50,8 @@ from collections import OrderedDict
 
 import slowtorch
 from slowtorch import empty
+from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
-from slowtorch._utils import DeviceType
 from slowtorch._utils import Dtype
 from slowtorch._utils import set_module
 from slowtorch._variable_functions import uniform_
@@ -114,7 +114,7 @@ class Parameter(Tensor):
         """Ensure that setting `data` updates the parameter in-place."""
         if not isinstance(value, Tensor):
             raise TypeError("Parameter data must be a tensor")
-        self._cdata[:] = value._cdata
+        self.storage[:] = value.storage
 
     def __repr__(self) -> str:
         """Return a string representation of `Parameter` object."""

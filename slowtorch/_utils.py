@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Tuesday, April 01 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -113,7 +113,6 @@ class Device:
         return f"{self.type}:{self.index}"
 
 
-DeviceType: t.TypeAlias = None | str | int | Device
 device = Device
 
 

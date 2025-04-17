@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Wednesday, April 02 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -43,6 +43,7 @@ import statistics
 import typing as t
 
 import slowtorch
+from slowtorch import function_dispatch
 from slowtorch._tensor import Node
 from slowtorch._tensor import Tensor
 from slowtorch._types import Number
@@ -53,6 +54,7 @@ from slowtorch._utils import safe_max
 from slowtorch._utils import safe_range
 
 
+@function_dispatch
 def add(input: Tensor, other: Number | Tensor) -> Tensor:
     """Perform element-wise addition of the tensor with a scalar or
     another tensor.
@@ -82,7 +84,7 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data + other for data in input._cdata]
+        new_tensor[:] = [data + other for data in input.storage]
     elif isinstance(other, Tensor):
         dtype = (
             slowtorch.float64
@@ -118,6 +120,7 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def sub(input: Tensor, other: Number | Tensor) -> Tensor:
     """Perform element-wise subtraction of the tensor with a scalar or
     another tensor.
@@ -147,7 +150,7 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data - other for data in input._cdata]
+        new_tensor[:] = [data - other for data in input.storage]
     elif isinstance(other, Tensor):
         dtype = (
             slowtorch.float64
@@ -183,6 +186,7 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def mul(input: Tensor, other: Number | Tensor) -> Tensor:
     """Perform element-wise multiplication of the tensor with a scalar
     or another tensor.
@@ -212,7 +216,7 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data * other for data in input._cdata]
+        new_tensor[:] = [data * other for data in input.storage]
     elif isinstance(other, Tensor):
         dtype = (
             slowtorch.float64
@@ -248,6 +252,7 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def div(
     input: Tensor,
     other: Number | Tensor,
@@ -274,7 +279,7 @@ def div(
     new_tensor: Tensor
     data: list[Number] = []
     if isinstance(other, Number):
-        for idx in input._cdata:
+        for idx in input.storage:
             try:
                 data.append(
                     idx // other if rounding_mode == "floor" else idx / other
@@ -321,6 +326,41 @@ def div(
     return new_tensor
 
 
+@function_dispatch
+def neg(input: Tensor) -> Tensor:
+    """Perform element-wise negation of the tensor.
+
+    This function negates the input tensor and returns the tensor with
+    same shape and dtype but negated.
+
+    :param input: Input tensor to be multiplied.
+    :return: A new tensor containing the result of the element-wise
+        negation.
+    """
+    new_tensor = Tensor(
+        input.shape,
+        input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    new_tensor[:] = [data * -1 for data in input.storage]
+
+    def NegBackward0() -> None:
+        """Backpropagation implementation for negation.
+
+        Computes gradients for `input` and propagates them.
+        """
+        if input.nelement() > 1:
+            raise RuntimeError("grad can be created only for scalars")
+        if None in (input.grad,):
+            input.grad = Tensor(1, input.dtype)
+        input.grad += -1 * new_tensor.grad
+
+    new_tensor.grad_fn = Node(NegBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
 def matmul(input: Tensor, other: Tensor) -> Tensor:
     """Perform element-wise matrix multiplication of the tensor with
     another tensor.
@@ -409,6 +449,7 @@ def matmul(input: Tensor, other: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
     """Perform element-wise modulo operation of the tensor with a
     scalar or another tensor.
@@ -438,7 +479,7 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data % other for data in input._cdata]
+        new_tensor[:] = [data % other for data in input.storage]
     elif isinstance(other, Tensor):
         dtype = (
             slowtorch.float64
@@ -474,6 +515,7 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def pow(input: Tensor, other: Number | Tensor) -> Tensor:
     """Perform element-wise exponentiation of the tensor with a
     scalar or another tensor.
@@ -503,7 +545,7 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data**other for data in input._cdata]
+        new_tensor[:] = [data**other for data in input.storage]
     elif isinstance(other, Tensor):
         dtype = (
             slowtorch.float64
@@ -539,6 +581,7 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def clone(input: Tensor) -> Tensor:
     """Return a deep copy of the tensor.
 
@@ -573,6 +616,7 @@ def clone(input: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def sum(
     input: Tensor,
     dim: None | int = None,
@@ -640,6 +684,7 @@ def sum(
     return new_tensor
 
 
+@function_dispatch
 def max(
     input: Tensor,
     dim: None | int = None,
@@ -716,6 +761,7 @@ def max(
     return new_tensor
 
 
+@function_dispatch
 def min(
     input: Tensor,
     dim: None | int = None,
@@ -792,6 +838,7 @@ def min(
     return new_tensor
 
 
+@function_dispatch
 def mean(
     input: Tensor,
     dim: None | int = None,
@@ -866,6 +913,7 @@ def mean(
     return new_tensor
 
 
+@function_dispatch
 def exp(input: Tensor) -> Tensor:
     """Perform element-wise exponentiation of the tensor.
 
@@ -905,6 +953,7 @@ def exp(input: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def sqrt(input: Tensor) -> Tensor:
     """Perform element-wise square root of a tensor.
 
@@ -924,7 +973,7 @@ def sqrt(input: Tensor) -> Tensor:
         requires_grad=input.requires_grad,
     )
     data: list[Number] = []
-    for idx in input._cdata:
+    for idx in input.storage:
         result = idx**0.5
         data.append(slowtorch.nan if isinstance(result, complex) else result)
     new_tensor[:] = data
@@ -945,6 +994,7 @@ def sqrt(input: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def relu(input: Tensor) -> Tensor:
     """Apply the Rectified Linear Unit (ReLU) function element-wise.
 
@@ -996,6 +1046,7 @@ def relu(input: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
     """Apply the Exponential Linear Unit (ELU) function
     element-wise.
@@ -1057,6 +1108,7 @@ def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def tanh(input: Tensor) -> Tensor:
     """Apply the Hyperbolic Tangent (Tanh) function element-wise.
 
@@ -1113,6 +1165,7 @@ def tanh(input: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def sigmoid(input: Tensor) -> Tensor:
     """Apply the Sigmoid function element-wise.
 
@@ -1166,6 +1219,7 @@ def sigmoid(input: Tensor) -> Tensor:
     return new_tensor
 
 
+@function_dispatch
 def linear(
     input: Tensor, weight: Tensor, bias: None | Tensor = None
 ) -> Tensor:
@@ -1214,6 +1268,7 @@ def linear(
     return new_tensor
 
 
+@function_dispatch
 def mse_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """Compute the Mean Squared Error (MSE) loss between two tensors.
 

@@ -48,7 +48,7 @@ __all__: list[str] = [
 
 _T = t.TypeVar("_T")
 
-version: str = "1.3.2025"
+version: str = "30.4.2025"
 
 
 def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:
