@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, April 01 2025
+Last updated on: Thursday, April 17 2025
 
 Tensor object.
 
@@ -497,7 +497,9 @@ class Tensor:
         """
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
-            self.storage[offset] = safe_round(value, self._print_opts.precision)
+            self.storage[offset] = safe_round(
+                value, self._print_opts.precision
+            )
             return
         new_tensor = Tensor(
             shape,
@@ -520,7 +522,7 @@ class Tensor:
                     self.device,
                     self.requires_grad,
                 )
-            array_like = value.storage
+            array_like = value.flat()
         if new_tensor.nelement() != len(array_like):
             raise ValueError(
                 "Number of elements in the value doesn't match the shape"
@@ -998,7 +1000,7 @@ class Tensor:
                 for dim in range(sub_tensor.shape[0]):
                     sub_tensors.append(sub_tensor[dim])
 
-    def storage(self) -> list[Number]:
+    def flat(self) -> list[Number]:
         """Flatten the tensor and return all its elements in a list.
 
         This method traverses through the tensor and collects its
@@ -1211,7 +1213,7 @@ class Tensor:
             raise ValueError("max must have same shape as the input tensor")
         if out is None:
             out = Tensor(self.shape, self.dtype)
-        F = self.storage
+        F = self.flat()
         R = range(len(F))
         if isinstance(min, Tensor) and isinstance(max, Tensor):
             L = [py_min(max._flat[_], py_max(min._flat[_], F[_])) for _ in R]
