@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, April 17 2025
+Last updated on: Thursday, May 01 2025
 
 Tensor object.
 
@@ -20,12 +20,12 @@ differentiation, and flexible data types. Whereas, the `tensor` function
 is a factory function to create tensors from nested data structures. It
 infers tensor shape, data type, and supports optional device
 specification and gradient requirements. Designed with flexibility,
-efficiency, and modularity in mind, the `Tensor` class aims to replicate
-and innovate upon the core features of PyTorch tensors while emphasising
-a Python-standard-library-only approach. Additionally, the class
-introduces a Pythonic, educational perspective, making it suitable for
-learning and experimentation with tensor mechanics without relying on
-external libraries.
+efficiency, and modularity in mind, the `Tensor` class aims to
+replicate and innovate upon the core features of PyTorch tensors while
+emphasising a Python-standard-library-only approach. Additionally, the
+class introduces a Pythonic, educational perspective, making it suitable
+for learning and experimentation with tensor mechanics without relying
+on external libraries.
 
 As of now, the module supports features such as::
 
@@ -44,13 +44,13 @@ eschewing C or Cython extensions, the `Tensor` class offers an
 accessible implementation that emphasises algorithmic clarity over raw
 performance.
 
-In addition to the core `Tensor` functionality, this module introduces
-several helper functions to aid in tensor manipulation and generation.
-These functions are designed to complement the `Tensor` class and mimic
-key functionality found in PyTorch.
+In addition to the core `Tensor` functionality, this module
+introduces several helper functions to aid in tensor manipulation and
+generation. These functions are designed to complement the `Tensor`
+class and mimic key functionality found in PyTorch.
 
-While this module implements many fundamental features of `Tensor`, it
-does not aim to match PyTorch's performance or breadth. Instead, the
+While this module implements many fundamental features of `Tensor`,
+it does not aim to match PyTorch's performance or breadth. Instead, the
 focus is on clarity, usability, and modularity, providing a platform for
 learning and experimentation.
 """
@@ -104,17 +104,19 @@ py_max = max
 py_sorted = sorted
 
 supported_dtypes: tuple[Dtype, ...] = (
-    (bool := Dtype("bool", "b1", ctypes.c_bool, False)),
-    (int8 := Dtype("int8", "i1", ctypes.c_int8, 0)),
-    (uint8 := Dtype("uint8", "u1", ctypes.c_uint8, 0)),
-    (int16 := Dtype("int16", "i2", ctypes.c_int16, 0)),
-    (uint16 := Dtype("uint16", "u2", ctypes.c_uint16, 0)),
-    (int32 := Dtype("int32", "i4", ctypes.c_int32, 0)),
-    (uint32 := Dtype("uint32", "u4", ctypes.c_uint32, 0)),
-    (int64 := Dtype("int64", "i8", ctypes.c_int64, 0)),
-    (uint64 := Dtype("uint64", "u8", ctypes.c_uint64, 0)),
-    (float32 := Dtype("float32", "f4", ctypes.c_float, 0.0)),
-    (float64 := Dtype("float64", "f8", ctypes.c_double, 0.0)),
+    (bool := Dtype("bool", "b1", ctypes.c_bool, False, "BoolTensor")),
+    (int8 := Dtype("int8", "i1", ctypes.c_int8, 0, "CharTensor")),
+    (uint8 := Dtype("uint8", "u1", ctypes.c_uint8, 0, "ByteTensor")),
+    (int16 := Dtype("int16", "i2", ctypes.c_int16, 0, "ShortTensor")),
+    (
+        uint16 := Dtype("uint16", "u2", ctypes.c_uint16, 0, "ShortTensor")
+    ),  # No!
+    (int32 := Dtype("int32", "i4", ctypes.c_int32, 0, "IntTensor")),
+    (uint32 := Dtype("uint32", "u4", ctypes.c_uint32, 0, "IntTensor")),  # No!
+    (int64 := Dtype("int64", "i8", ctypes.c_int64, 0, "LongTensor")),
+    (uint64 := Dtype("uint64", "u8", ctypes.c_uint64, 0, "LongTensor")),  # No!
+    (float32 := Dtype("float32", "f4", ctypes.c_float, 0.0, "FloatTensor")),
+    (float64 := Dtype("float64", "f8", ctypes.c_double, 0.0, "DoubleTensor")),
 )
 
 double = float64
@@ -181,7 +183,7 @@ class Node:
 class Tensor:
     """Represent a multi-dimensional tensor object.
 
-    A `Tensor` is the core data structure in SlowTorch, supporting
+    `Tensor` is the core data structure in SlowTorch, supporting
     multi-dimensional data storage and computation. Tensors are defined
     by their shape, data type, device, and additional metadata like
     strides and offsets for memory layout.
@@ -1816,19 +1818,13 @@ class Tensor:
         return slowtorch.nn.functional.sigmoid(self)
 
 
+@set_module("slowtorch")
 @function_dispatch
-def tensor(
-    data: Number | ArrayLike,
-    *,
-    dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: builtins.bool = False,
-) -> Tensor:
-    """Create a tensor from the input data.
+class tensor(Tensor):
+    """Construct a tensor with no autograd history by copying data.
 
-    This function initialises a tensor with a given data array,
-    optionally specifying its data type, device, and gradient
-    requirement.
+    This class initialises a tensor with a given data array, optionally
+    specifying its data type, device, and gradient requirement.
 
     :param data: The data from which to create the tensor. Must have
         uniform shape.
@@ -1838,32 +1834,60 @@ def tensor(
         `None`.
     :param requires_grad: Whether the tensor requires gradients for
         backpropagation, defaults to `False`.
-    :return: A new instance of the Tensor object.
     :raises ValueError: If the input data does not have a uniform shape.
     """
-    if not has_uniform_shape(data):
-        raise ValueError("Input data is not uniformly nested")
-    size = size if (size := calculate_shape_from_data(data)) else (1,)
-    array_like: list[t.Any] = []
 
-    def chain_from_iterable(object: Number | ArrayLike) -> None:
-        """Recursively flatten the input iterable."""
-        if isinstance(object, Iterable) and not isinstance(data, (str, bytes)):
-            for idx in object:
-                chain_from_iterable(idx)
-        else:
-            array_like.append(object)
+    __qualname__ = "Tensor"
 
-    chain_from_iterable(data)
-    if dtype is None:
-        dtype = (
-            int64
-            if all(isinstance(idx, int) for idx in array_like)
-            else float64
-        )
-    new_tensor = Tensor(size, dtype, device, requires_grad)
-    new_tensor[:] = array_like
-    return new_tensor
+    def __init__(
+        self,
+        data: Number | ArrayLike,
+        *,
+        dtype: None | Dtype = None,
+        device: DeviceType = None,
+        requires_grad: builtins.bool = False,
+    ) -> None:
+        """Initialise a `tensor` object from input data."""
+        if not has_uniform_shape(data):
+            raise ValueError("Input data is not uniformly nested")
+        size = size if (size := calculate_shape_from_data(data)) else (1,)
+        array_like: list[t.Any] = []
+
+        def chain_from_iterable(object: Number | ArrayLike) -> None:
+            """Recursively flatten the input iterable."""
+            if isinstance(object, Iterable) and not isinstance(
+                data, (str, bytes)
+            ):
+                for idx in object:
+                    chain_from_iterable(idx)
+            else:
+                array_like.append(object)
+
+        chain_from_iterable(data)
+        if dtype is None:
+            dtype = (
+                bool
+                if all(isinstance(idx, builtins.bool) for idx in array_like)
+                else (
+                    int64
+                    if all(
+                        isinstance(idx, int)
+                        and not isinstance(idx, builtins.bool)
+                        for idx in array_like
+                    )
+                    else (
+                        float64
+                        if all(
+                            isinstance(idx, (int, float))
+                            and not isinstance(idx, builtins.bool)
+                            for idx in array_like
+                        )
+                        else None
+                    )
+                )
+            )
+        super().__init__(size, dtype, device, requires_grad)
+        self[:] = array_like
 
 
 @function_dispatch
@@ -1885,6 +1909,33 @@ def load(
     weights_only: None | builtins.bool = None,
 ) -> t.Any:
     """Load an object saved from a file."""
+    weights_only = weights_only
     with open(f, "rb") as opened_file:
         output = pickle_module.load(opened_file)
     return output
+
+
+@function_dispatch
+def typename(obj: t.Any) -> str:
+    """String representation of the type of an object.
+
+    This function returns a fully qualified string representation of an
+    object's type.
+
+    :param obj: The object whose type to represent
+    :return: The type of the object.
+    """
+    if isinstance(obj, Tensor):
+        return f"slowtorch.{obj.dtype.typename}"
+    module = "slowtorch" or ""
+    qualname = ""
+    if hasattr(obj, "__qualname__"):
+        qualname = obj.__qualname__
+    elif hasattr(obj, "__name__"):
+        qualname = obj.__name__
+    else:
+        module = obj.__class__.__module__ or ""
+        qualname = obj.__class__.__qualname__
+    if module in {"", "builtins"}:
+        return qualname
+    return f"{module}.{qualname}"
