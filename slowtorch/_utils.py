@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, April 01 2025
+Last updated on: Thursday, May 01 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -133,6 +133,7 @@ class Dtype:
         internal details.
     :param value: A representative value for the data type, used for
         internal operations or comparisons.
+    :param typename: A `typename` similar to PyTorch tensors.
     """
 
     __qualname__: str = "dtype"
@@ -143,12 +144,14 @@ class Dtype:
         short: str,
         data: t.Any,
         value: Number | bool,
+        typename: str,
     ) -> None:
         """Initialise a new `Dtype` object with name and value."""
         self.name = name
         self.itemsize = int(short[-1])
         self.data = data
         self.value = value
+        self.typename = typename
 
     def __repr__(self) -> str:
         """Return a string representation of the `Dtype` object."""
