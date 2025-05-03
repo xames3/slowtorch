@@ -4,7 +4,7 @@ SlowTorch
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Monday, March 03 2025
+Last updated on: Friday, May 02 2025
 
 SlowTorch is yet another personal pet-project of mine where I tried and
 implemented the basic and bare-bones functionality of PyTorch just using
@@ -41,6 +41,7 @@ import slowtorch._types as types
 __all__: list[str] = [
     "function_dispatch",
     "nn",
+    "optim",
     "random",
     "types",
     "version",
@@ -48,7 +49,7 @@ __all__: list[str] = [
 
 _T = t.TypeVar("_T")
 
-version: str = "30.4.2025"
+version: str = "31.5.2025"
 
 
 def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:
@@ -76,3 +77,4 @@ __all__ += _utils.__all__
 
 import slowtorch._random as random
 import slowtorch.nn as nn
+import slowtorch.optim as optim
