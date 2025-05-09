@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, May 01 2025
+Last updated on: Thursday, May 08 2025
 
 Tensor object.
 
@@ -931,9 +931,9 @@ class Tensor:
     itemsize = property(element_size)
 
     @property
-    def shape(self) -> Size | tuple[int, ...]:
+    def shape(self) -> Size:
         """Return shape of the tensor."""
-        return self._shape
+        return Size(self._shape)
 
     @shape.setter
     def shape(self, value: Size) -> None:
