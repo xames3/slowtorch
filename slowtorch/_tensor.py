@@ -304,8 +304,10 @@ class Tensor:
             formatted += "]"
         else:
             element = repr(self.storage[offset])
-            if "." in element and element.endswith(".0"):
+            if "." in element:
                 element = f"{element[:-1]:<0{whitespace}}"
+                if element.endswith(".0"):
+                    element = element[:-1]
             else:
                 element = f"{element:>{whitespace}}"
             formatted += element
