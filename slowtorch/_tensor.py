@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, May 08 2025
+Last updated on: Tuesday, May 13 2025
 
 Tensor object.
 
@@ -211,7 +211,7 @@ class Tensor:
     def __init__(
         self,
         shape: Size | tuple[int, ...] | int,
-        dtype: None | Dtype = float64,
+        dtype: None | Dtype = float32,
         device: DeviceType = None,
         requires_grad: builtins.bool = False,
         buffer: None | t.Any = None,
@@ -229,7 +229,7 @@ class Tensor:
             shape = (shape,)
         self._shape = tuple(int(dim) for dim in shape)
         if dtype is None:
-            dtype = float64
+            dtype = float32
         elif isinstance(dtype, type):
             dtype = globals()[
                 f"{dtype.__name__}{'32' if dtype != builtins.bool else ''}"
@@ -328,7 +328,7 @@ class Tensor:
                     extra = f", grad_fn=<{self.grad_fn.name}>"
             except AttributeError:
                 pass
-        if self.dtype not in (float64, int64, bool):
+        if self.dtype not in (float32, int32, bool):
             return f"tensor({formatted}, dtype={self.dtype}{extra})"
         else:
             return f"tensor({formatted}{extra})"
@@ -1080,13 +1080,13 @@ class Tensor:
 
     def float(self) -> Tensor:
         """Return tensor with floating dtype."""
-        return self.to(float64)
+        return self.to(float32)
 
     float64 = float32 = half = double = float
 
     def int(self) -> Tensor:
         """Return tensor with integer dtype."""
-        return self.to(int64)
+        return self.to(int32)
 
     int64 = int32 = int16 = int8 = long = char = int
 
@@ -1593,7 +1593,7 @@ class Tensor:
         graph: list[tuple[Tensor, ...] | Tensor] = []
         seen: set[tuple[Tensor, ...] | Tensor] = set()
         if gradient is None:
-            gradient = Tensor(1, float64)
+            gradient = Tensor(1, float32)
             gradient[:] = 1.0
         self.grad = gradient
 
@@ -1871,14 +1871,14 @@ class tensor(Tensor):
                 bool
                 if all(isinstance(idx, builtins.bool) for idx in array_like)
                 else (
-                    int64
+                    int32
                     if all(
                         isinstance(idx, int)
                         and not isinstance(idx, builtins.bool)
                         for idx in array_like
                     )
                     else (
-                        float64
+                        float32
                         if all(
                             isinstance(idx, (int, float))
                             and not isinstance(idx, builtins.bool)

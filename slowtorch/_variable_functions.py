@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Tuesday, April 01 2025
+Last updated on: Tuesday, May 13 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -192,7 +192,7 @@ def randint(
     if size is None:
         raise ValueError("Size must be tuple of ints, not None")
     if dtype is None:
-        dtype = slowtorch.int64
+        dtype = slowtorch.int32
     if isinstance(size, tuple):
         new_tensor = Tensor(size, dtype, device, requires_grad)
         if len(size) == 1:
@@ -237,7 +237,7 @@ def randperm(
     if generator is None:
         generator = default_generator
     if dtype is None:
-        dtype = slowtorch.int64
+        dtype = slowtorch.int32
     new_tensor = Tensor((n,), dtype, device, requires_grad)
     data = list(range(n))
     generator.internal.shuffle(data)
@@ -568,9 +568,9 @@ def arange(
     size = max(0, math.ceil((end - start) / step))
     if dtype is None:
         dtype = (
-            slowtorch.int64
+            slowtorch.int32
             if all(isinstance(idx, int) for idx in (start, end, step))
-            else slowtorch.float64
+            else slowtorch.float32
         )
     new_tensor = empty(
         size, dtype=dtype, device=device, requires_grad=requires_grad
@@ -606,7 +606,7 @@ def linspace(
     if steps <= 0:
         raise ValueError("Number of steps must be a positive integer")
     if dtype is None:
-        dtype = slowtorch.float64
+        dtype = slowtorch.float32
     new_tensor = empty(
         steps, dtype=dtype, device=device, requires_grad=requires_grad
     )
