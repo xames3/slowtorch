@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, May 13 2025
+Last updated on: Wednesday, May 14 2025
 
 Tensor object.
 
@@ -108,13 +108,11 @@ supported_dtypes: tuple[Dtype, ...] = (
     (int8 := Dtype("int8", "i1", ctypes.c_int8, 0, "CharTensor")),
     (uint8 := Dtype("uint8", "u1", ctypes.c_uint8, 0, "ByteTensor")),
     (int16 := Dtype("int16", "i2", ctypes.c_int16, 0, "ShortTensor")),
-    (
-        uint16 := Dtype("uint16", "u2", ctypes.c_uint16, 0, "ShortTensor")
-    ),  # No!
+    (uint16 := Dtype("uint16", "u2", ctypes.c_uint16, 0, "UShortTensor")),
     (int32 := Dtype("int32", "i4", ctypes.c_int32, 0, "IntTensor")),
-    (uint32 := Dtype("uint32", "u4", ctypes.c_uint32, 0, "IntTensor")),  # No!
+    (uint32 := Dtype("uint32", "u4", ctypes.c_uint32, 0, "UIntTensor")),
     (int64 := Dtype("int64", "i8", ctypes.c_int64, 0, "LongTensor")),
-    (uint64 := Dtype("uint64", "u8", ctypes.c_uint64, 0, "LongTensor")),  # No!
+    (uint64 := Dtype("uint64", "u8", ctypes.c_uint64, 0, "ULongTensor")),
     (float32 := Dtype("float32", "f4", ctypes.c_float, 0.0, "FloatTensor")),
     (float64 := Dtype("float64", "f8", ctypes.c_double, 0.0, "DoubleTensor")),
 )
@@ -232,7 +230,7 @@ class Tensor:
             dtype = float32
         elif isinstance(dtype, type):
             dtype = globals()[
-                f"{dtype.__name__}{'32' if dtype != builtins.bool else ''}"
+                f"{dtype.__name__}{'32' if dtype == float else ''}"
             ]
         else:
             dtype = globals()[dtype]
@@ -285,10 +283,18 @@ class Tensor:
         pad: int = 0,
         whitespace: int = 0,
         only: builtins.bool = False,
+        precision: int = 4,
     ) -> str:
         """Method to mimic PyTorch's tensor as close as possible."""
         if only:
-            return str(self.storage[0])
+            value = self.storage[offset]
+            if isinstance(value, float):
+                element = f"{value:.{precision}f}".rstrip("0").rstrip(".")
+                if "." not in element:
+                    element += "."
+            else:
+                element = str(value)
+            return element.rjust(whitespace)
         indent = min(2, max(0, (self.ndim - axis - 1)))
         if axis < len(self.shape):
             formatted += "["
@@ -297,41 +303,55 @@ class Tensor:
                     formatted += ("\n " + " " * pad + " " * axis) * indent
                 current = offset + idx * self._strides[axis] // self._itemsize
                 formatted = self.format_repr(
-                    formatted, axis + 1, current, pad, whitespace
+                    formatted,
+                    axis + 1,
+                    current,
+                    pad,
+                    whitespace,
+                    False,
+                    precision,
                 )
                 if idx < self.shape[axis] - 1:
                     formatted += ", "
             formatted += "]"
         else:
-            element = repr(self.storage[offset])
-            if "." in element:
-                element = f"{element[:-1]:<0{whitespace}}"
-                if element.endswith(".0"):
-                    element = element[:-1]
+            value = self.storage[offset]
+            if isinstance(value, float):
+                element = f"{value:.{precision}f}".rstrip("0").rstrip(".")
+                if "." not in element:
+                    element += "."
             else:
-                element = f"{element:>{whitespace}}"
-            formatted += element
+                element = str(value)
+            formatted += element.rjust(whitespace)
         return formatted
 
     def __repr__(self) -> str:
         """Return a string representation of `Tensor` object."""
-        whitespace = max(
-            len(str(self.storage[idx])) for idx in range(self.nelement())
-        )
+        precision = getattr(self._print_opts, "precision", 4)
+
+        def format_element(value: t.Any) -> str:
+            if isinstance(value, float):
+                out = f"{value:.{precision}f}".rstrip("0").rstrip(".")
+                return out + "." if "." not in out else out
+            return str(value)
+
+        whitespace = max(len(format_element(value)) for value in self.storage)
         only = len(self.storage) == 1
-        formatted = self.format_repr("", 0, self._offset, 7, whitespace, only)
-        extra: str = ""
+        formatted = self.format_repr(
+            "", 0, self._offset, 7, whitespace, only, precision
+        )
+        extra = ""
         if self.requires_grad:
-            extra = ", requires_grad=True"
             try:
                 if self.grad_fn.name:
                     extra = f", grad_fn=<{self.grad_fn.name}>"
+                else:
+                    extra = ", requires_grad=True"
             except AttributeError:
-                pass
-        if self.dtype not in (float32, int32, bool):
+                extra = ", requires_grad=True"
+        if self.dtype not in (float32, float64, int64, bool):
             return f"tensor({formatted}, dtype={self.dtype}{extra})"
-        else:
-            return f"tensor({formatted}{extra})"
+        return f"tensor({formatted}{extra})"
 
     def calculate_offset_shape_strides(
         self, key: int | slice | tuple[None | int | slice, ...] | t.Ellipsis
@@ -667,6 +687,24 @@ class Tensor:
         """
         return slowtorch.nn.functional.div(self, other)
 
+    def __rtruediv__(self, other: Number | Tensor) -> Tensor:
+        """Perform element-wise right-hand division of the tensor with a
+        scalar or another tensor.
+
+        This method supports division with scalars (int or float) and
+        other tensors of the same shape. The resulting tensor is of the
+        same shape and dtype as the input.
+
+        :param other: The operand for division. Can be a scalar or an
+            tensor of the same shape.
+        :return: A new tensor containing the result of the element-wise
+            division.
+        :raises TypeError: If `other` is neither a scalar nor a tensor.
+        :raises ValueError: If `other` is a tensor but its shape
+            doesn't match `self.shape`.
+        """
+        return slowtorch.nn.functional.div(other, self)
+
     def __floordiv__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise division of the tensor with a scalar or
         another tensor.
@@ -771,14 +809,14 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x < other for x in self.storage]
+            new_tensor[:] = (x < other for x in self.storage)
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
-            new_tensor[:] = [x < y for x, y in zip(self._flat, other._flat)]
+            new_tensor[:] = (x < y for x, y in zip(self._flat, other._flat))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for <: {type(self).__name__!r} "
@@ -804,14 +842,14 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x > other for x in self.storage]
+            new_tensor[:] = (x > other for x in self.storage)
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
-            new_tensor[:] = [x > y for x, y in zip(self._flat, other._flat)]
+            new_tensor[:] = (x > y for x, y in zip(self._flat, other._flat))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for >: {type(self).__name__!r} "
@@ -837,14 +875,14 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x <= other for x in self.storage]
+            new_tensor[:] = (x <= other for x in self.storage)
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
-            new_tensor[:] = [x <= y for x, y in zip(self._flat, other._flat)]
+            new_tensor[:] = (x <= y for x, y in zip(self._flat, other._flat))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for <=: {type(self).__name__!r} "
@@ -870,14 +908,14 @@ class Tensor:
         """
         new_tensor = Tensor(self.shape, bool)
         if isinstance(other, Number):
-            new_tensor[:] = [x >= other for x in self.storage]
+            new_tensor[:] = (x >= other for x in self.storage)
         elif isinstance(other, Tensor):
             if self.shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
                     f"{self.shape} {other.shape}"
                 )
-            new_tensor[:] = [x >= y for x, y in zip(self._flat, other._flat)]
+            new_tensor[:] = (x >= y for x, y in zip(self._flat, other._flat))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for >=: {type(self).__name__!r} "
@@ -1086,7 +1124,7 @@ class Tensor:
 
     def int(self) -> Tensor:
         """Return tensor with integer dtype."""
-        return self.to(int32)
+        return self.to(int64)
 
     int64 = int32 = int16 = int8 = long = char = int
 
@@ -1220,13 +1258,13 @@ class Tensor:
         F = self.flat()
         R = range(len(F))
         if isinstance(min, Tensor) and isinstance(max, Tensor):
-            L = [py_min(max._flat[_], py_max(min._flat[_], F[_])) for _ in R]
+            L = (py_min(max._flat[_], py_max(min._flat[_], F[_])) for _ in R)
         elif isinstance(min, Tensor):
-            L = [py_min(max, py_max(min._flat[_], F[_])) for _ in R]
+            L = (py_min(max, py_max(min._flat[_], F[_])) for _ in R)
         elif isinstance(max, Tensor):
-            L = [py_min(max._flat[_], py_max(min, F[_])) for _ in R]
+            L = (py_min(max._flat[_], py_max(min, F[_])) for _ in R)
         else:
-            L = [py_min(max, py_max(min, _)) for _ in F]
+            L = (py_min(max, py_max(min, _)) for _ in F)
         out[:] = L
         return out
 
@@ -1612,6 +1650,17 @@ class Tensor:
                 node.grad_fn()
         self.grad = None
 
+    def log(self) -> Tensor:
+        """Return a new tensor with the natural logarithm of the elements
+        of input.
+
+        This method creates a new `Tensor` instance with the same shape and
+        as the original tensor but with natural logarithm calculated.
+
+        :return: A new tensor with the log calculated data and shape.
+        """
+        return slowtorch.nn.functional.log(self)
+
     def clone(self) -> Tensor:
         """Return a deep copy of the tensor.
 
@@ -1871,7 +1920,7 @@ class tensor(Tensor):
                 bool
                 if all(isinstance(idx, builtins.bool) for idx in array_like)
                 else (
-                    int32
+                    int64
                     if all(
                         isinstance(idx, int)
                         and not isinstance(idx, builtins.bool)
