@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Wednesday, April 02 2025
+Last updated on: Wednesday, May 14 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -75,7 +75,7 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
     new_tensor: Tensor
     if isinstance(other, Number):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if isinstance(other, float) or input.dtype.name.startswith("float")
             else slowtorch.int64
         )
@@ -84,10 +84,10 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data + other for data in input.storage]
+        new_tensor[:] = (data + other for data in input.storage)
     elif isinstance(other, Tensor):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if input.dtype.name.startswith("float")
             or other.dtype.name.startswith("float")
             else slowtorch.int64
@@ -97,7 +97,7 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
         other = other.broadcast_to(shape)
         requires_grad = input.requires_grad or other.requires_grad
         new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = [x + y for x, y in zip(input._flat, other._flat)]
+        new_tensor[:] = (x + y for x, y in zip(input._flat, other._flat))
     else:
         raise TypeError(
             f"Unsupported operand type(s) for +: {type(input).__name__!r} "
@@ -141,7 +141,7 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
     new_tensor: Tensor
     if isinstance(other, Number):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if isinstance(other, float) or input.dtype.name.startswith("float")
             else slowtorch.int64
         )
@@ -150,10 +150,10 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data - other for data in input.storage]
+        new_tensor[:] = (data - other for data in input.storage)
     elif isinstance(other, Tensor):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if input.dtype.name.startswith("float")
             or other.dtype.name.startswith("float")
             else slowtorch.int64
@@ -163,7 +163,7 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
         other = other.broadcast_to(shape)
         requires_grad = input.requires_grad or other.requires_grad
         new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = [x - y for x, y in zip(input._flat, other._flat)]
+        new_tensor[:] = (x - y for x, y in zip(input._flat, other._flat))
     else:
         raise TypeError(
             f"Unsupported operand type(s) for -: {type(input).__name__!r} "
@@ -207,7 +207,7 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
     new_tensor: Tensor
     if isinstance(other, Number):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if isinstance(other, float) or input.dtype.name.startswith("float")
             else slowtorch.int64
         )
@@ -216,10 +216,10 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data * other for data in input.storage]
+        new_tensor[:] = (data * other for data in input.storage)
     elif isinstance(other, Tensor):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if input.dtype.name.startswith("float")
             or other.dtype.name.startswith("float")
             else slowtorch.int64
@@ -229,7 +229,7 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
         other = other.broadcast_to(shape)
         requires_grad = input.requires_grad or other.requires_grad
         new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = [x * y for x, y in zip(input._flat, other._flat)]
+        new_tensor[:] = (x * y for x, y in zip(input._flat, other._flat))
     else:
         raise TypeError(
             f"Unsupported operand type(s) for *: {type(input).__name__!r} "
@@ -317,7 +317,7 @@ def div(
         them.
         """
         if None in (input.grad, other.grad):
-            input.grad = other.grad = Tensor(1, slowtorch.float64)
+            input.grad = other.grad = Tensor(1, slowtorch.float32)
         input.grad += new_tensor.grad / other
         other.grad -= new_tensor.grad * (input / (other**2))
 
@@ -342,7 +342,7 @@ def neg(input: Tensor) -> Tensor:
         input.dtype,
         requires_grad=input.requires_grad,
     )
-    new_tensor[:] = [data * -1 for data in input.storage]
+    new_tensor[:] = (data * -1 for data in input.storage)
 
     def NegBackward0() -> None:
         """Backpropagation implementation for negation.
@@ -383,7 +383,7 @@ def matmul(input: Tensor, other: Tensor) -> Tensor:
             f"and {type(other).__name__!r}"
         )
     dtype = (
-        slowtorch.float64
+        slowtorch.float32
         if input.dtype.name.startswith("float")
         or other.dtype.name.startswith("float")
         else slowtorch.int64
@@ -470,7 +470,7 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
     new_tensor: Tensor
     if isinstance(other, Number):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if isinstance(other, float) or input.dtype.name.startswith("float")
             else slowtorch.int64
         )
@@ -479,10 +479,10 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data % other for data in input.storage]
+        new_tensor[:] = (data % other for data in input.storage)
     elif isinstance(other, Tensor):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if input.dtype.name.startswith("float")
             or other.dtype.name.startswith("float")
             else slowtorch.int64
@@ -492,7 +492,7 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
         other = other.broadcast_to(shape)
         requires_grad = input.requires_grad or other.requires_grad
         new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = [x % y for x, y in zip(input._flat, other._flat)]
+        new_tensor[:] = (x % y for x, y in zip(input._flat, other._flat))
     else:
         raise TypeError(
             f"Unsupported operand type(s) for %: {type(input).__name__!r} "
@@ -536,7 +536,7 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
     new_tensor: Tensor
     if isinstance(other, Number):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if isinstance(other, float) or input.dtype.name.startswith("float")
             else slowtorch.int64
         )
@@ -545,10 +545,10 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
             dtype,
             requires_grad=input.requires_grad,
         )
-        new_tensor[:] = [data**other for data in input.storage]
+        new_tensor[:] = (data**other for data in input.storage)
     elif isinstance(other, Tensor):
         dtype = (
-            slowtorch.float64
+            slowtorch.float32
             if input.dtype.name.startswith("float")
             or other.dtype.name.startswith("float")
             else slowtorch.int64
@@ -558,7 +558,7 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
         other = other.broadcast_to(shape)
         requires_grad = input.requires_grad or other.requires_grad
         new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = [x**y for x, y in zip(input._flat, other._flat)]
+        new_tensor[:] = (x**y for x, y in zip(input._flat, other._flat))
     else:
         raise TypeError(
             f"Unsupported operand type(s) for **: {type(input).__name__!r} "
@@ -577,6 +577,35 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
         input.grad += (other * input ** (other - 1)) * new_tensor.grad
 
     new_tensor.grad_fn = Node(PowBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
+def log(input: Tensor) -> Tensor:
+    """Return a new tensor with the natural logarithm of the elements
+    of input.
+
+    This method creates a new `Tensor` instance with the same shape and
+    as the original tensor but with natural logarithm calculated.
+
+    :param input: Input tensor.
+    :return: A new tensor with the log calculated data and shape.
+    """
+    shape, requires_grad = input.shape, input.requires_grad
+    new_tensor = Tensor(shape, slowtorch.float32, requires_grad=requires_grad)
+    new_tensor[:] = (math.log(idx) for idx in input.storage)
+
+    def LogBackward0() -> None:
+        """Backpropagation implementation for logarithm.
+
+        Computes gradient for `input` and propagate it.
+        """
+        if None in (input.grad,):
+            input.grad = Tensor(1, slowtorch.float32)
+        input.grad += new_tensor.grad / input
+
+    new_tensor.grad_fn = Node(LogBackward0)
     new_tensor.grad_fn.inputs = (input,)
     return new_tensor
 
@@ -932,7 +961,7 @@ def exp(input: Tensor) -> Tensor:
         input.dtype,
         requires_grad=input.requires_grad,
     )
-    new_tensor[:] = [math.exp(dim) for dim in input._flat]
+    new_tensor[:] = (math.exp(dim) for dim in input._flat)
 
     def ExpBackward0() -> None:
         """Backpropagation implementation for exponentiation.
@@ -969,7 +998,7 @@ def sqrt(input: Tensor) -> Tensor:
     """
     new_tensor = Tensor(
         input.shape,
-        slowtorch.float64,
+        slowtorch.float32,
         requires_grad=input.requires_grad,
     )
     data: list[Number] = []
@@ -1128,11 +1157,11 @@ def tanh(input: Tensor) -> Tensor:
         requires_grad=input.requires_grad,
     )
     if len(input.shape) == 1:
-        new_tensor[:] = [
+        new_tensor[:] = (
             ((x := normal_exp(input[dim])) - (y := safe_exp(input[dim])))
             / (x + y)
             for dim in range(input.shape[0])
-        ]
+        )
     else:
         N = range(builtins.max(input.shape))
         for dim in itertools.product(N, N):

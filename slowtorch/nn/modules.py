@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Tuesday, April 01 2025
+Last updated on: Wednesday, May 14 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -49,7 +49,7 @@ import typing as t
 from collections import OrderedDict
 
 import slowtorch
-from slowtorch import empty
+from slowtorch import rand as empty
 from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
 from slowtorch._utils import Dtype
