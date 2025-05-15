@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Tuesday, May 13 2025
+Last updated on: Wednesday, May 14 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -58,6 +58,7 @@ from __future__ import annotations
 import itertools
 import math
 import typing as t
+from collections.abc import Iterable
 
 import slowtorch
 from slowtorch import function_dispatch
@@ -68,6 +69,8 @@ from slowtorch._tensor import Tensor
 from slowtorch._types import Number
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
+from slowtorch._utils import _fill_tensor
+from slowtorch._utils import dtypecheck
 
 
 @function_dispatch
@@ -93,25 +96,28 @@ def randn(
     """
     if generator is None:
         generator = default_generator
-    if len(size) == 1:
-        shape = size[0]
-        new_tensor = Tensor((shape,), dtype, device, requires_grad)
-        new_tensor[:] = [generator.internal.gauss(0, 1) for _ in range(shape)]
-        return new_tensor
-    elif len(size) > 1:
-        new_tensor = Tensor(size, dtype, device, requires_grad)
-        N = range(max(size))
-        for dim in itertools.product(N, N):
-            try:
-                new_tensor[dim] = generator.internal.gauss(0, 1)
-            except IndexError:
-                continue
-        return new_tensor
-    else:
+    if not isinstance(size, (int, Iterable)):
         raise TypeError(
             f"Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
+    dtype = dtypecheck(dtype)
+    if not dtype == slowtorch.float32:
+        raise RuntimeError(
+            f"'normal' not implemented for {dtype.typename[:-6]!r}"
+        )
+    shape: tuple[int, ...]
+    if len(size) == 1 and isinstance(size[0], Iterable):
+        shape = tuple(size[0])
+    else:
+        shape = tuple(size)
+    new_tensor = Tensor(shape, dtype, device, requires_grad)
+    numel = 1
+    for dim in shape:
+        numel *= dim
+    values = (generator.internal.gauss(0, 1) for _ in range(numel))
+    _fill_tensor(new_tensor, values)
+    return new_tensor
 
 
 @function_dispatch
@@ -137,27 +143,28 @@ def rand(
     """
     if generator is None:
         generator = default_generator
-    if len(size) == 1:
-        shape = size[0]
-        new_tensor = Tensor((shape,), dtype, device, requires_grad)
-        new_tensor[:] = [
-            generator.internal.uniform(0, 1) for _ in range(shape)
-        ]
-        return new_tensor
-    elif len(size) > 1:
-        new_tensor = Tensor(size, dtype, device, requires_grad)
-        N = range(max(size))
-        for dim in itertools.product(N, N):
-            try:
-                new_tensor[dim] = generator.internal.uniform(0, 1)
-            except IndexError:
-                continue
-        return new_tensor
-    else:
+    if not isinstance(size, (int, Iterable)):
         raise TypeError(
             f"Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
+    dtype = dtypecheck(dtype)
+    if not dtype == slowtorch.float32:
+        raise RuntimeError(
+            f"'uniform' not implemented for {dtype.typename[:-6]!r}"
+        )
+    shape: tuple[int, ...]
+    if len(size) == 1 and isinstance(size[0], Iterable):
+        shape = tuple(size[0])
+    else:
+        shape = tuple(size)
+    new_tensor = Tensor(shape, dtype, device, requires_grad)
+    numel = 1
+    for dim in shape:
+        numel *= dim
+    values = (generator.internal.uniform(0, 1) for _ in range(numel))
+    _fill_tensor(new_tensor, values)
+    return new_tensor
 
 
 @function_dispatch
@@ -192,22 +199,21 @@ def randint(
     if size is None:
         raise ValueError("Size must be tuple of ints, not None")
     if dtype is None:
-        dtype = slowtorch.int32
+        dtype = slowtorch.int64
     if isinstance(size, tuple):
-        new_tensor = Tensor(size, dtype, device, requires_grad)
-        if len(size) == 1:
-            new_tensor[:] = [
-                generator.internal.randint(low, high - 1)
-                for _ in range(size[0])
-            ]
-            return new_tensor
+        shape: tuple[int, ...]
+        if len(size) == 1 and isinstance(size[0], Iterable):
+            shape = tuple(size[0])
         else:
-            N = range(max(size))
-            for dim in itertools.product(N, N):
-                try:
-                    new_tensor[dim] = generator.internal.randint(low, high - 1)
-                except IndexError:
-                    continue
+            shape = tuple(size)
+        new_tensor = Tensor(shape, dtype, device, requires_grad)
+        numel = 1
+        for dim in shape:
+            numel *= dim
+        values = (
+            generator.internal.randint(low, high - 1) for _ in range(numel)
+        )
+        _fill_tensor(new_tensor, values)
         return new_tensor
     else:
         raise TypeError(f"Expected a sequence of integers got {size!r}")
@@ -237,7 +243,7 @@ def randperm(
     if generator is None:
         generator = default_generator
     if dtype is None:
-        dtype = slowtorch.int32
+        dtype = slowtorch.int64
     new_tensor = Tensor((n,), dtype, device, requires_grad)
     data = list(range(n))
     generator.internal.shuffle(data)
@@ -308,27 +314,20 @@ def empty(
         [1] The contents of the returned tensor are random and should
             not be used without proper initialisation.
     """
-    if len(size) == 1:
-        shape = size[0]
-        new_tensor = Tensor((shape,), dtype, device, requires_grad)
-        new_tensor[:] = [
-            default_generator.internal.uniform(-1.0, 1.0) for _ in range(shape)
-        ]
-        return new_tensor
-    elif len(size) > 1:
-        new_tensor = Tensor(size, dtype, device, requires_grad)
-        N = range(max(size))
-        for dim in itertools.product(N, N):
-            try:
-                new_tensor[dim] = default_generator.internal.uniform(-1.0, 1.0)
-            except IndexError:
-                continue
-        return new_tensor
-    else:
+    if not isinstance(size, (int, Iterable)):
         raise TypeError(
             f"Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
+    shape: tuple[int, ...]
+    if len(size) == 1 and isinstance(size[0], Iterable):
+        shape = tuple(size[0])
+    else:
+        shape = tuple(size)
+    new_tensor = Tensor(shape, dtype, device, requires_grad)
+    zero = 0.0 if dtypecheck(dtype) == slowtorch.float32 else 0
+    new_tensor.fill_(zero)
+    return new_tensor
 
 
 @function_dispatch
@@ -354,14 +353,12 @@ def zeros(
         on the returned tensor, defaults to `False`.
     :return: An initialised tensor with the values set to 0.
     """
-    new_tensor = empty(
+    return empty(
         *size,
         dtype=dtype,
         device=device,
         requires_grad=requires_grad,
     )
-    new_tensor.fill_(0.0)
-    return new_tensor
 
 
 @function_dispatch
@@ -486,12 +483,9 @@ def full(
         on the returned tensor, defaults to `False`.
     :return: An initialised tensor with the values set to `fill_value`.
     """
-    new_tensor = empty(
-        *size,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
-    )
+    if not isinstance(size[0], Iterable):
+        raise TypeError(f"Expected a sequence of integers got {size!r}")
+    new_tensor = Tensor(size[0], dtype, device, requires_grad)
     new_tensor.fill_(fill_value)
     return new_tensor
 
@@ -568,14 +562,14 @@ def arange(
     size = max(0, math.ceil((end - start) / step))
     if dtype is None:
         dtype = (
-            slowtorch.int32
+            slowtorch.int64
             if all(isinstance(idx, int) for idx in (start, end, step))
             else slowtorch.float32
         )
     new_tensor = empty(
         size, dtype=dtype, device=device, requires_grad=requires_grad
     )
-    new_tensor[:] = [start + idx * step for idx in range(size)]
+    new_tensor[:] = (start + idx * step for idx in range(size))
     return new_tensor
 
 
