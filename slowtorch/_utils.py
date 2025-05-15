@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, May 01 2025
+Last updated on: Wednesday, May 14 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -42,7 +42,9 @@ from __future__ import annotations
 import math
 import typing as t
 from collections.abc import Iterable
+from collections.abc import Iterator
 
+import slowtorch
 from slowtorch import function_dispatch
 
 if t.TYPE_CHECKING:
@@ -384,3 +386,36 @@ def safe_range(args: t.Any) -> range:
     elif len(args) == 1:
         return range(args[0])
     return range(args)
+
+
+def dtypecheck(dtype: None | t.Any) -> Dtype:
+    """Return a valid SlowTorch dtype based on the provided value.
+
+    :param dtype: A dtype-like object or Python primitive. If `None`,
+        defaults to `slowtorch.float32`.
+    :return: A canonical SlowTorch Dtype (`float32`, `int64`, or `bool`).
+    """
+    if dtype is None:
+        return slowtorch.float32
+    name = getattr(dtype, "name", None)
+    if isinstance(name, str):
+        if name.startswith("float"):
+            return slowtorch.float32
+        if name.startswith("int"):
+            return slowtorch.int64
+        return slowtorch.bool
+    if isinstance(dtype, float):
+        return slowtorch.float32
+    if isinstance(dtype, int):
+        return slowtorch.int64
+    return slowtorch.bool
+
+
+def _fill_tensor(tensor: Tensor, values: Iterator[float]) -> None:
+    """Recursively assign values from a flat iterator to a tensor."""
+    if hasattr(tensor, "shape") and len(tensor.shape) > 1:
+        for dim in range(tensor.shape[0]):
+            _fill_tensor(tensor[dim], values)
+    else:
+        for dim in range(len(tensor)):
+            tensor[dim] = next(values)
