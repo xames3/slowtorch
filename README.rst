@@ -1,6 +1,6 @@
 .. Author: Akshay Mestry <xa@mes3.dev>
 .. Created on: Thursday, October 10 2024
-.. Last updated on: Monday, March 03 2025
+.. Last updated on: Friday, May 16 2025
 
 .. figure:: https://github.com/xames3/slowtorch/blob/main/slowtorch-logo.png
     :alt: SlowTorch Logo
@@ -134,6 +134,29 @@ Tensor Creation Ops
       >>> slowtorch.arange(1, 2.5, 0.5)
       tensor([ 1., 1.5,  2.])
 
+- **slowtorch.linspace.** Generate evenly spaced values from start to end,
+  inclusive.
+
+  .. code-block:: python
+  
+      >>> slowtorch.linspace(3, 10, steps=5)
+      tensor([ 3.00000,  4.75000,  6.50000,  8.25000, 10.00000])
+      >>> slowtorch.linspace(-10, 10, steps=5)
+      tensor([-10.,  -5.,   0.,   5.,  10.])
+      >>> slowtorch.linspace(start=-10, end=10, steps=5)
+      tensor([-10.,  -5.,   0.,   5.,  10.])
+      >>> slowtorch.linspace(start=-10, end=10, steps=1)
+      tensor([-10.])
+
+- **slowtorch.cat.** Concatenates the given sequence of tensors in tensors in
+  the given dimension.
+
+  .. code-block:: python
+  
+      >>> a = slowtorch.tensor([2.0, 4.5, -1.7])
+      >>> slowtorch.cat((a, a))
+      tensor([  2.,  4.5, -1.7,   2.,  4.5, -1.7])
+
 Autograd Mechanics
 ===============================================================================
 
@@ -165,8 +188,8 @@ Autograd Mechanics
   some specialised `backward <https://pytorch.org/docs/stable/generated/torch.
   autograd.backward.html#torch.autograd.backward>`_ functions for
   backpropagation. These functions are mainly for representing the derivative
-  or gradient calculations of the said functions.
-- SlowTorch supports a few backward functions when ``requires_grad`` is True:
+  or gradient calculations of the said functions. SlowTorch supports a few
+  backward functions when ``requires_grad`` is ``True``:
 
   - **AddBackward0.** For addition operations.
 
@@ -200,6 +223,14 @@ Autograd Mechanics
       >>> a // b 
       tensor([-9.0, 3.00, -1.0], grad_fn=<DivBackward0>)
 
+  - **NegBackward0.** For negation operations.
+
+  .. code-block:: python
+
+      >>> a = slowtorch.tensor([2.0, 4.5, -1.7], requires_grad=True)
+      >>> -a
+      tensor([ -2., -4.5,  1.7], grad_fn=<NegBackward0>)
+
   - **DotBackward0.** For matrix multiplication operations.
 
   .. code-block:: python
@@ -213,6 +244,13 @@ Autograd Mechanics
 
       >>> a ** 2 
       tensor([4.000, 20.25,  2.89], grad_fn=<PowBackward0>)
+
+  - **LogBackward0.** For logarithmic operations.
+
+  .. code-block:: python
+
+      >>> a.log()
+      tensor([0.69315, 1.50408,    nan], grad_fn=<LogBackward0>)
 
   - **CloneBackward0.** For clone/copy operation.
 
@@ -248,6 +286,13 @@ Autograd Mechanics
 
       >>> a.mean()
       tensor(1.6, grad_fn=<MeanBackward0>)
+
+  - **StdBackward0.** For calculating standard deviation.
+
+  .. code-block:: python
+
+      >>> a.std()
+      tensor(3.119294882, grad_fn=<StdBackward0>)
 
   - **ExpBackward0.** For exponentiation operation with respect to ``e``.
 
@@ -339,6 +384,10 @@ Autograd Mechanics
               [1.7698], 
               [2.0918]], grad_fn=<AddmmBackward0>)
 
+  **Note.** The above demonstration is just for the forward pass through a
+  linear layer without any activation. To get better results, you need to train
+  the model with additional activation layer(s).
+
   - **MSELossBackward0.** When calculating Mean Squared Error loss.
 
   .. code-block:: python
@@ -372,7 +421,7 @@ Tensor class reference
       >>> a.ndim
       2
       >>> b = slowtorch.zeros(2, 3, 4)
-      >>> b.ndim
+      >>> b.dim()
       3
 
 - **Tensor.nbytes.** Total bytes consumed by the elements of the tensor.
@@ -404,7 +453,7 @@ Tensor class reference
       >>> a.itemsize
       8
       >>> b = slowtorch.tensor([1, 2, 3], dtype=slowtorch.int16)
-      >>> b.itemsize
+      >>> b.element_size()
       2
 
 - **Tensor.shape.** Size of the tensor as a tuple.
@@ -580,20 +629,21 @@ Tensor class methods
       2
 
 - **Tensor.view().** Gives a new shape to a tensor without changing its
-  data.
+  data. Alias for ``Tensor.reshape()``.
 
   .. code-block:: python
   
-      >>> a = slowtorch.arange(6).reshape((3, 2))
+      >>> a = slowtorch.arange(6).view(3, 2)
       >>> a
       tensor([[0, 1], 
               [2, 3], 
               [4, 5]])
       >>> a = slowtorch.tensor([[1, 2, 3], [4, 5, 6]])
-      >>> a.reshape((6,))
+      >>> a.reshape(6)
       tensor([1, 2, 3, 4, 5, 6])
 
-- **Tensor.transpose().** Returns a tensor with dimensions transposed.
+- **Tensor.transpose().** Returns a tensor with dimensions transposed. Alias
+  for ``Tensor.swapaxes`` and ``Tensor.swapdims``.
 
   .. code-block:: python
   
@@ -605,10 +655,10 @@ Tensor class methods
       tensor([[1, 3], 
               [2, 4]])
       >>> a = slowtorch.tensor([1, 2, 3, 4])
-      >>> a.transpose()
+      >>> a.swapaxes()
       tensor([1, 2, 3, 4])
       >>> a = slowtorch.ones((1, 2, 3))
-      >>> a.transpose((1, 0, 2)).shape
+      >>> a.swapdims((1, 0, 2)).shape
       (2, 1, 3)
 
 Constants
@@ -651,6 +701,89 @@ Constants
   
       >>> slowtorch.pi
       3.141592653589793
+
+-------------------------------------------------------------------------------
+SlowTorch In Action
+-------------------------------------------------------------------------------
+
+Below is a small demonstration of what SlowTorch can do, albeit... slowly.
+
+.. code-block:: python
+
+    >>> import slowtorch
+    >>> import slowtorch.nn as snn
+    >>> 
+    >>> xs = slowtorch.tensor(
+    ...     [
+    ...         [1.5, 6.2, 2.6, 3.1, 5.3, 5.3, 7.9, 2.8],
+    ...         [3.9, 2.8, 9.3, 6.4, 8.5, 6.9, 3.8, 3.1],
+    ...         [3.4, 6.0, 4.4, 8.7, 9.7, 7.7, 1.6, 7.5],
+    ...         [6.7, 8.8, 7.5, 1.8, 3.3, 8.4, 4.7, 5.1],
+    ...         [6.8, 0.6, 4.8, 2.9, 6.8, 3.6, 3.5, 5.6],
+    ...         [4.3, 4.2, 3.7, 7.0, 3.5, 8.5, 2.4, 2.9],
+    ...     ],
+    ...     requires_grad=True
+    ... )
+    >>> ys = slowtorch.tensor(
+    ...     [
+    ...         [0.558],
+    ...         [0.175],
+    ...         [0.152],
+    ...         [0.485],
+    ...         [0.232],
+    ...         [0.0134],
+    ...     ]
+    ... )
+    >>> 
+    >>>
+    >>> class NeuralNetwork(snn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.l1 = snn.Linear(8, 16)
+    ...         self.l2 = snn.Linear(16, 32)
+    ...         self.l3 = snn.Linear(32, 16)
+    ...         self.l4 = snn.Linear(16, 8)
+    ...         self.l5 = snn.Linear(8, 1)
+    ...         self.tanh = snn.Tanh()
+    ...     def forward(self, x):
+    ...         x = self.tanh(self.l1(x))
+    ...         x = self.tanh(self.l2(x))
+    ...         x = self.tanh(self.l3(x))
+    ...         x = self.tanh(self.l4(x))
+    ...         x = self.tanh(self.l5(x))
+    ...         return x
+    ...         
+    >>> 
+    >>> model = NeuralNetwork()
+    >>> print(f"Parameters: {sum(p.nelement() for p in model.parameters())}")
+    Parameters: 1361
+    >>> 
+    >>> epochs = 500
+    >>> criterion = snn.MSELoss()
+    >>> optimiser = slowtorch.optim.SGD(model.parameters(), 0.1, momentum=0.1)
+    >>> 
+    >>> for epoch in range(epochs):
+    ...     ypred = model(ys)
+    ...     loss = criterion(ypred, ys)
+    ...     optimiser.zero_grad()
+    ...     loss.backward()
+    ...     optimiser.step()
+    ...     if epoch % 100 == 0:
+    ...         print(f"New loss: {loss.item():.7f}")
+    ... 
+    New loss: 0.0403600
+    New loss: 0.0098700
+    New loss: 0.0002800
+    New loss: 0.0000100
+    New loss: 0.0000000
+    >>> ypred
+    tensor([[0.55807], 
+            [0.17516], 
+            [0.15148], 
+            [ 0.4849], 
+            [0.23193], 
+            [0.01396]], grad_fn=<TanhBackward0>)
+    >>> 
 
 -------------------------------------------------------------------------------
 Usage and Documentation

@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, May 15 2025
+Last updated on: Friday, May 16 2025
 
 Tensor object.
 
@@ -1345,27 +1345,9 @@ class Tensor:
         :return: A new tensor view with transposed dimensions.
         :raises ValueError: If the provided dimensions are invalid.
         """
-        if sorted((dim0, dim1)) != list(range(self.ndim)):
-            raise ValueError("Invalid dimensions permutation")
-        dims = tuple(reversed(sorted((dim0, dim1))))
-        shape = tuple(self.shape[dim] for dim in dims)
-        strides = tuple(self._strides[dim] for dim in dims)
-        new_tensor = self.view_(tuple(shape), tuple(strides))
+        return slowtorch.nn.functional.transpose(self, dim0, dim1)
 
-        def PermuteBackward0() -> None:
-            """Backpropagation implementation for transpose.
-
-            Computes gradients for `input` tensor and propagates them.
-            This is achieved by reversing the transpose operation during
-            the backward pass by swapping the same dimensions (dim0,
-            dim1) in the gradient tensor.
-            """
-            if new_tensor.grad is not None:
-                self.grad = new_tensor.grad.transpose(dim0, dim1)
-
-        new_tensor.grad_fn = Node(PermuteBackward0)
-        new_tensor.grad_fn.inputs = (self, dim0, dim1)
-        return new_tensor
+    swapaxes = swapdims = transpose
 
     def t(self) -> Tensor:
         """Transpose dimensions 0 and 1."""
@@ -1574,7 +1556,7 @@ class Tensor:
             raise RuntimeError("Rounding mode is not supported")
         return self.__div__(other)
 
-    divide = div
+    true_divide = divide = div
 
     def matmul(self, other: Tensor) -> Tensor:
         """Perform matrix multiplication of the tensor with another
