@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Wednesday, May 14 2025
+Last updated on: Thursday, May 15 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -49,7 +49,7 @@ import typing as t
 from collections import OrderedDict
 
 import slowtorch
-from slowtorch import rand as empty
+from slowtorch import randn
 from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
 from slowtorch._utils import Dtype
@@ -99,7 +99,7 @@ class Parameter(Tensor):
     ) -> None:
         """Initialise a `Parameter` instance with optional data."""
         if data is None:
-            data = empty(1, requires_grad=requires_grad)
+            data = randn(1, requires_grad=requires_grad)
         data.requires_grad = requires_grad
         for key, value in data.__dict__.items():
             setattr(self, key, value)
@@ -380,20 +380,11 @@ class Linear(Module):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = Parameter(
-            empty(
-                out_features,
-                in_features,
-                dtype=dtype,
-                device=device,
-            )
+            randn(out_features, in_features, dtype=dtype, device=device)
         )
         if bias:
             self.bias = Parameter(
-                empty(
-                    out_features,
-                    dtype=dtype,
-                    device=device,
-                )
+                randn(out_features, dtype=dtype, device=device)
             )
         else:
             self.bias = None
