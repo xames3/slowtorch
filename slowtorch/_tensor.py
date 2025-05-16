@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Wednesday, May 14 2025
+Last updated on: Thursday, May 15 2025
 
 Tensor object.
 
@@ -1684,7 +1684,7 @@ class Tensor:
     def sum(
         self,
         dim: None | builtins.int = None,
-        keepdims: builtins.bool = False,
+        keepdim: builtins.bool = False,
     ) -> Tensor:
         """Compute the sum of elements in the tensor across a specified
         dimension.
@@ -1697,19 +1697,19 @@ class Tensor:
         :param dim: The dimension along which to compute the sum,
             defaults to `None`. For `None`, the sum is computed over all
             elements of the tensor.
-        :param keepdims: A boolean indicating whether to retain the
+        :param keepdim: A boolean indicating whether to retain the
             reduced dimensions in the resulting tensor, defaults to
             `False`.
         :return: A new tensor containing the sum of the specified
             elements.
         :raises ValueError: If the specified dimension is invalid.
         """
-        return slowtorch.nn.functional.sum(self, dim, keepdims)
+        return slowtorch.nn.functional.sum(self, dim, keepdim)
 
     def max(
         self,
         dim: None | builtins.int = None,
-        keepdims: builtins.bool = False,
+        keepdim: builtins.bool = False,
     ) -> Tensor:
         """Return the maximum of elements in the tensor across a
         specified dimension.
@@ -1722,19 +1722,19 @@ class Tensor:
         :param dim: The dimension along which to compute the maximum,
             defaults to `None`. For `None`, the maximum is computed over
             all elements of the tensor.
-        :param keepdims: A boolean indicating whether to retain the
+        :param keepdim: A boolean indicating whether to retain the
             reduced dimensions in the resulting tensor, defaults to
             `False`.
         :return: A new tensor containing the maximum of the specified
             elements.
         :raises ValueError: If the specified dimension is invalid.
         """
-        return slowtorch.nn.functional.max(self, dim, keepdims)
+        return slowtorch.nn.functional.max(self, dim, keepdim)
 
     def min(
         self,
         dim: None | builtins.int = None,
-        keepdims: builtins.bool = False,
+        keepdim: builtins.bool = False,
     ) -> Tensor:
         """Return the minimum of elements in the tensor across a
         specified dimension.
@@ -1747,19 +1747,19 @@ class Tensor:
         :param dim: The dimension along which to compute the minimum,
             defaults to `None`. For `None`, the minimum is computed over
             all elements of the tensor.
-        :param keepdims: A boolean indicating whether to retain the
+        :param keepdim: A boolean indicating whether to retain the
             reduced dimensions in the resulting tensor, defaults to
             `False`.
         :return: A new tensor containing the minimum of the specified
             elements.
         :raises ValueError: If the specified dimension is invalid.
         """
-        return slowtorch.nn.functional.min(self, dim, keepdims)
+        return slowtorch.nn.functional.min(self, dim, keepdim)
 
     def mean(
         self,
         dim: None | builtins.int = None,
-        keepdims: builtins.bool = False,
+        keepdim: builtins.bool = False,
     ) -> Tensor:
         """Compute the mean of elements in the tensor across a specified
         dimension.
@@ -1772,14 +1772,39 @@ class Tensor:
         :param dim: The dimension along which to compute the mean,
             defaults to `None`. For `None`, the mean is computed over
             all elements of the tensor.
-        :param keepdims: A boolean indicating whether to retain the
+        :param keepdim: A boolean indicating whether to retain the
             reduced dimensions in the resulting tensor, defaults to
             `False`.
         :return: A new tensor containing the mean of the specified
             elements.
         :raises ValueError: If the specified dimension is invalid.
         """
-        return slowtorch.nn.functional.mean(self, dim, keepdims)
+        return slowtorch.nn.functional.mean(self, dim, keepdim)
+
+    def std(
+        self,
+        dim: None | builtins.int = None,
+        keepdim: builtins.bool = False,
+    ) -> Tensor:
+        """Compute the standard deviation of elements in the tensor
+        across a specified dimension.
+
+        This method computes the standard deviation of all elements in
+        the tensor if no dimension is provided. If a dimension is
+        specified, the method reduces the tensor along the given
+        dimension while optionally retaining the reduced dimensions.
+
+        :param dim: The dimension along which to compute the standard
+            deviation, defaults to `None`. For `None`, the standard
+            deviation is computed over all elements of the tensor.
+        :param keepdim: A boolean indicating whether to retain the
+            reduced dimensions in the resulting tensor, defaults to
+            `False`.
+        :return: A new tensor containing the standard deviation of the
+            specified elements.
+        :raises ValueError: If the specified dimension is invalid.
+        """
+        return slowtorch.nn.functional.std(self, dim, keepdim)
 
     def exp(self) -> Tensor:
         """Perform element-wise exponentiation of the tensor.
