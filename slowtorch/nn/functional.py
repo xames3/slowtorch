@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Wednesday, May 14 2025
+Last updated on: Thursday, May 15 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -649,7 +649,7 @@ def clone(input: Tensor) -> Tensor:
 def sum(
     input: Tensor,
     dim: None | int = None,
-    keepdims: bool = False,
+    keepdim: bool = False,
 ) -> Tensor:
     """Compute the sum of elements in the tensor across a specified
     dimension.
@@ -663,7 +663,7 @@ def sum(
     :param dim: The dimension along which to compute the sum, defaults
         to `None`. For `None`, the sum is computed over all elements of
         the tensor.
-    :param keepdims: A boolean indicating whether to retain the reduced
+    :param keepdim: A boolean indicating whether to retain the reduced
         dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the sum of the specified elements.
     :raises ValueError: If the specified dimension is invalid.
@@ -671,7 +671,7 @@ def sum(
     if dim is not None and not (0 <= dim < input.ndim):
         raise ValueError(f"Invalid dimension {dim} for tensor")
     if dim is None:
-        shape = (1,) if not keepdims else (1,) * input.ndim
+        shape = (1,) if not keepdim else (1,) * input.ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -680,9 +680,9 @@ def sum(
         new_tensor[:] = builtins.sum(input._flat)
     else:
         shape = tuple(
-            (1 if idx == dim and keepdims else input.shape[idx])
+            (1 if idx == dim and keepdim else input.shape[idx])
             for idx in range(input.ndim)
-            if keepdims or idx != dim
+            if keepdim or idx != dim
         )
         new_tensor = Tensor(
             shape,
@@ -690,12 +690,12 @@ def sum(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            dims = Tensor(idx).unravel_index(shape)[0].shape
-            indices = list(dims)
+            indices = list((idx,))
             indices.insert(dim, slice(None))  # type: ignore
             value = input[tuple(indices)]
             value = value.sum().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(dims)] = value
+            dimension = indices if keepdim else (idx,)
+            new_tensor[tuple(dimension)] = value
 
     def SumBackward0() -> None:
         """Backward pass for the sum operation.
@@ -717,7 +717,7 @@ def sum(
 def max(
     input: Tensor,
     dim: None | int = None,
-    keepdims: bool = False,
+    keepdim: bool = False,
 ) -> Tensor:
     """Return the maximum of elements in the tensor across a
     specified dimension.
@@ -729,11 +729,10 @@ def max(
 
     :param input: Input tensor to be computed for maximum values.
     :param dim: The dimension along which to compute the maximum,
-        defaults to `None`. For `None`, the maximum is computed over
-        all elements of the tensor.
-    :param keepdims: A boolean indicating whether to retain the
-        reduced dimensions in the resulting tensor, defaults to
-        `False`.
+        defaults to `None`. For `None`, the maximum is computed over all
+        elements of the tensor.
+    :param keepdim: A boolean indicating whether to retain the reduced
+        dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the maximum of the specified
         elements.
     :raises ValueError: If the specified dimension is invalid.
@@ -741,7 +740,7 @@ def max(
     if dim is not None and not (0 <= dim < input.ndim):
         raise ValueError(f"Invalid dimension {dim} for tensor")
     if dim is None:
-        shape = 1 if not keepdims else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * input.ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -750,9 +749,9 @@ def max(
         new_tensor[:] = builtins.max(input._flat)
     else:
         shape = tuple(
-            (1 if idx == dim and keepdims else input.shape[idx])
+            (1 if idx == dim and keepdim else input.shape[idx])
             for idx in range(input.ndim)
-            if keepdims or idx != dim
+            if keepdim or idx != dim
         )
         new_tensor = Tensor(
             shape,
@@ -760,12 +759,12 @@ def max(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            dims = Tensor(idx).unravel_index(shape)[0].shape
-            indices = list(dims)
+            indices = list((idx,))
             indices.insert(dim, slice(None))  # type: ignore
             value = input[tuple(indices)]
             value = value.max().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(dims)] = value
+            dimension = indices if keepdim else (idx,)
+            new_tensor[tuple(dimension)] = value
 
     def MaxBackward0() -> None:
         """Backward pass for the maximum operation.
@@ -794,7 +793,7 @@ def max(
 def min(
     input: Tensor,
     dim: None | int = None,
-    keepdims: bool = False,
+    keepdim: bool = False,
 ) -> Tensor:
     """Return the minimum of elements in the tensor across a
     specified dimension.
@@ -806,11 +805,10 @@ def min(
 
     :param input: Input tensor to be computed for minimum values.
     :param dim: The dimension along which to compute the minimum,
-        defaults to `None`. For `None`, the minimum is computed over
-        all elements of the tensor.
-    :param keepdims: A boolean indicating whether to retain the
-        reduced dimensions in the resulting tensor, defaults to
-        `False`.
+        defaults to `None`. For `None`, the minimum is computed over all
+        elements of the tensor.
+    :param keepdim: A boolean indicating whether to retain the reduced
+        dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the minimum of the specified
         elements.
     :raises ValueError: If the specified dimension is invalid.
@@ -818,7 +816,7 @@ def min(
     if dim is not None and not (0 <= dim < input.ndim):
         raise ValueError(f"Invalid dimension {dim} for tensor")
     if dim is None:
-        shape = 1 if not keepdims else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * input.ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -827,9 +825,9 @@ def min(
         new_tensor[:] = builtins.min(input._flat)
     else:
         shape = tuple(
-            (1 if idx == dim and keepdims else input.shape[idx])
+            (1 if idx == dim and keepdim else input.shape[idx])
             for idx in range(input.ndim)
-            if keepdims or idx != dim
+            if keepdim or idx != dim
         )
         new_tensor = Tensor(
             shape,
@@ -837,12 +835,12 @@ def min(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            dims = Tensor(idx).unravel_index(shape)[0].shape
-            indices = list(dims)
+            indices = list((idx,))
             indices.insert(dim, slice(None))  # type: ignore
             value = input[tuple(indices)]
             value = value.min().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(dims)] = value
+            dimension = indices if keepdim else (idx,)
+            new_tensor[tuple(dimension)] = value
 
     def MinBackward0() -> None:
         """Backward pass for the minimum operation.
@@ -871,7 +869,7 @@ def min(
 def mean(
     input: Tensor,
     dim: None | int = None,
-    keepdims: bool = False,
+    keepdim: bool = False,
 ) -> Tensor:
     """Return the mean of elements in the tensor across a specified
     dimension.
@@ -882,20 +880,18 @@ def mean(
     retaining the reduced dimensions.
 
     :param input: Input tensor to be computed for mean values.
-    :param dim: The dimension along which to compute the mean,
-        defaults to `None`. For `None`, the mean is computed over
-        all elements of the tensor.
-    :param keepdims: A boolean indicating whether to retain the
-        reduced dimensions in the resulting tensor, defaults to
-        `False`.
-    :return: A new tensor containing the mean of the specified
-        elements.
+    :param dim: The dimension along which to compute the mean, defaults
+        to `None`. For `None`, the mean is computed over all elements of
+        the tensor.
+    :param keepdim: A boolean indicating whether to retain the reduced
+        dimensions in the resulting tensor, defaults to `False`.
+    :return: A new tensor containing the mean of the specified elements.
     :raises ValueError: If the specified dimension is invalid.
     """
     if dim is not None and not (0 <= dim < input.ndim):
         raise ValueError(f"Invalid dimension {dim} for tensor")
     if dim is None:
-        shape = 1 if not keepdims else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * input.ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -904,9 +900,9 @@ def mean(
         new_tensor[:] = statistics.mean(input._flat)
     else:
         shape = tuple(
-            (1 if idx == dim and keepdims else input.shape[idx])
+            (1 if idx == dim and keepdim else input.shape[idx])
             for idx in range(input.ndim)
-            if keepdims or idx != dim
+            if keepdim or idx != dim
         )
         new_tensor = Tensor(
             shape,
@@ -914,12 +910,12 @@ def mean(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            dims = Tensor(idx).unravel_index(shape)[0].shape
-            indices = list(dims)
+            indices = list((idx,))
             indices.insert(dim, slice(None))  # type: ignore
             value = input[tuple(indices)]
             value = value.mean().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(dims)] = value
+            dimension = indices if keepdim else (idx,)
+            new_tensor[tuple(dimension)] = value
 
     def MeanBackward0() -> None:
         """Backward pass for the mean operation.
@@ -938,6 +934,81 @@ def mean(
                 continue
 
     new_tensor.grad_fn = Node(MeanBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
+def std(
+    input: Tensor,
+    dim: None | int = None,
+    correction: int = 1,
+    keepdim: bool = False,
+) -> Tensor:
+    """Return the standard deviation of elements in the tensor across a
+    specified dimension.
+
+    This function returns the standard deviation of all elements in the
+    tensor if no dimension is provided. If a dimension is specified, the
+    function reduces the tensor along the given dimension while
+    optionally retaining the reduced dimensions.
+
+    :param input: Input tensor to be computed for standard deviation
+        values.
+    :param dim: The dimension along which to compute the standard
+        deviation, defaults to `None`. For `None`, the standard
+        deviation is computed over all elements of the tensor.
+    :param correction: Difference between the sample size and sample
+        degrees of freedom, defaults to `1`.
+    :param keepdim: A boolean indicating whether to retain the reduced
+        dimensions in the resulting tensor, defaults to `False`.
+    :return: A new tensor containing the standard deviation of the
+        specified elements.
+    :raises ValueError: If the specified dimension is invalid.
+    """
+    if dim is not None and not (0 <= dim < input.ndim):
+        raise ValueError(f"Invalid dimension {dim} for tensor")
+    if dim is None:
+        shape = 1 if not keepdim else (1,) * input.ndim
+        new_tensor = Tensor(
+            shape,
+            dtype=input.dtype,
+            requires_grad=input.requires_grad,
+        )
+        new_tensor[:] = statistics.stdev(input._flat)
+    else:
+        shape = tuple(
+            (1 if idx == dim and keepdim else input.shape[idx])
+            for idx in range(input.ndim)
+            if keepdim or idx != dim
+        )
+        new_tensor = Tensor(
+            shape,
+            dtype=input.dtype,
+            requires_grad=input.requires_grad,
+        )
+        for idx in range(new_tensor.nelement()):
+            indices = list((idx,))
+            indices.insert(dim, slice(None))  # type: ignore
+            value = input[tuple(indices)]
+            value = value.std().item() if isinstance(value, Tensor) else value
+            dimension = indices if keepdim else (idx,)
+            new_tensor[tuple(dimension)] = value
+
+    def StdBackward0() -> None:
+        """Backward pass for the standard deviation operation.
+
+        Distributes the gradient from the resulting tensor back to the
+        input tensor. If `dim` was specified, the gradient is
+        appropriately expanded to match the original tensor's shape.
+        """
+        if None in (input.grad,):
+            input.grad = Tensor(input.shape, input.dtype)
+        input.grad += (
+            new_tensor.grad / ((input.nelement() - correction) * new_tensor)
+        ) * (input - input.mean())
+
+    new_tensor.grad_fn = Node(StdBackward0)
     new_tensor.grad_fn.inputs = (input,)
     return new_tensor
 
