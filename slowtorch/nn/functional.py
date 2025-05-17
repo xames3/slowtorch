@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Thursday, May 15 2025
+Last updated on: Friday, May 16 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -594,7 +594,13 @@ def log(input: Tensor) -> Tensor:
     """
     shape, requires_grad = input.shape, input.requires_grad
     new_tensor = Tensor(shape, slowtorch.float32, requires_grad=requires_grad)
-    new_tensor[:] = (math.log(idx) for idx in input.storage)
+    data = []
+    for idx in input.storage:
+        try:
+            data.append(math.log(idx))
+        except ValueError:
+            data.append(slowtorch.nan)
+    new_tensor[:] = data
 
     def LogBackward0() -> None:
         """Backpropagation implementation for logarithm.
@@ -642,6 +648,43 @@ def clone(input: Tensor) -> Tensor:
 
     new_tensor.grad_fn = Node(CloneBackward0)
     new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
+def transpose(input: Tensor, dim0: int, dim1: int) -> Tensor:
+    """Transpose the tensor by permuting its dimensions.
+
+    This method returns a view of the tensor with its dimensions
+    permuted. If no dimensions are specified, the dimensions are
+    reversed (i.e., equivalent to a full transpose).
+
+    :param input: Input tensor to be transposed.
+    :param dim0: First dimension to be transposed.
+    :param dim1: Second dimension to be transposed.
+    :return: A new tensor view with transposed dimensions.
+    :raises ValueError: If the provided dimensions are invalid.
+    """
+    if sorted((dim0, dim1)) != list(range(input.ndim)):
+        raise ValueError("Invalid dimensions permutation")
+    dims = tuple(reversed(sorted((dim0, dim1))))
+    shape = tuple(input.shape[dim] for dim in dims)
+    strides = tuple(input._strides[dim] for dim in dims)
+    new_tensor = input.view_(tuple(shape), tuple(strides))
+
+    def PermuteBackward0() -> None:
+        """Backpropagation implementation for transpose.
+
+        Computes gradients for `input` tensor and propagates them.
+        This is achieved by reversing the transpose operation during
+        the backward pass by swapping the same dimensions (dim0,
+        dim1) in the gradient tensor.
+        """
+        if new_tensor.grad is not None:
+            input.grad = new_tensor.grad.transpose(dim0, dim1)
+
+    new_tensor.grad_fn = Node(PermuteBackward0)
+    new_tensor.grad_fn.inputs = (input, dim0, dim1)
     return new_tensor
 
 
