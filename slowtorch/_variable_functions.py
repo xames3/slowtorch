@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Wednesday, May 14 2025
+Last updated on: Monday, May 19 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -98,7 +98,7 @@ def randn(
         generator = default_generator
     if not isinstance(size, (int, Iterable)):
         raise TypeError(
-            f"Expected a sequence of integers or a single integer, "
+            "Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
     dtype = dtypecheck(dtype)
@@ -145,7 +145,7 @@ def rand(
         generator = default_generator
     if not isinstance(size, (int, Iterable)):
         raise TypeError(
-            f"Expected a sequence of integers or a single integer, "
+            "Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
     dtype = dtypecheck(dtype)
@@ -316,7 +316,7 @@ def empty(
     """
     if not isinstance(size, (int, Iterable)):
         raise TypeError(
-            f"Expected a sequence of integers or a single integer, "
+            "Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
     shape: tuple[int, ...]
