@@ -47,6 +47,7 @@ from slowtorch import function_dispatch
 from slowtorch._tensor import Node
 from slowtorch._tensor import Tensor
 from slowtorch._types import Number
+from slowtorch._utils import Dtype
 from slowtorch._utils import broadcast_shapes
 from slowtorch._utils import normal_exp
 from slowtorch._utils import safe_exp
@@ -722,7 +723,7 @@ def sum(
         if dim < 0:
             dim += ndim
     if dim is None:
-        shape = (1,) if not keepdim else (1,) * ndim
+        shape = 1 if not keepdim else (1,) * ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -736,7 +737,7 @@ def sum(
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
-            shape,
+            shape if shape else (1,),
             dtype=input.dtype,
             requires_grad=input.requires_grad,
         )
@@ -744,12 +745,15 @@ def sum(
             unravelled_indices = unravel_index(idx, shape)
             indices = list(unravelled_indices)
             if keepdim:
-                indices.insert(dim, slice(None))  # type: ignore
+                indices = tuple(
+                    indices[idx] if idx != dim else slice(None)
+                    for idx in range(len(indices))
+                )
             else:
                 indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.sum().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(unravelled_indices)] = value
+            new_tensor[unravelled_indices] = value
 
     def SumBackward0() -> None:
         """Backward pass for the sum operation.
@@ -815,7 +819,7 @@ def max(
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
-            shape,
+            shape if shape else (1,),
             dtype=input.dtype,
             requires_grad=input.requires_grad,
         )
@@ -823,12 +827,15 @@ def max(
             unravelled_indices = unravel_index(idx, shape)
             indices = list(unravelled_indices)
             if keepdim:
-                indices.insert(dim, slice(None))  # type: ignore
+                indices = tuple(
+                    indices[idx] if idx != dim else slice(None)
+                    for idx in range(len(indices))
+                )
             else:
                 indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.max().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(unravelled_indices)] = value
+            new_tensor[unravelled_indices] = value
 
     def MaxBackward0() -> None:
         """Backward pass for the maximum operation.
@@ -901,7 +908,7 @@ def min(
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
-            shape,
+            shape if shape else (1,),
             dtype=input.dtype,
             requires_grad=input.requires_grad,
         )
@@ -909,12 +916,15 @@ def min(
             unravelled_indices = unravel_index(idx, shape)
             indices = list(unravelled_indices)
             if keepdim:
-                indices.insert(dim, slice(None))  # type: ignore
+                indices = tuple(
+                    indices[idx] if idx != dim else slice(None)
+                    for idx in range(len(indices))
+                )
             else:
                 indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.min().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(unravelled_indices)] = value
+            new_tensor[unravelled_indices] = value
 
     def MinBackward0() -> None:
         """Backward pass for the minimum operation.
@@ -986,7 +996,7 @@ def mean(
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
-            shape,
+            shape if shape else (1,),
             dtype=input.dtype,
             requires_grad=input.requires_grad,
         )
@@ -994,12 +1004,15 @@ def mean(
             unravelled_indices = unravel_index(idx, shape)
             indices = list(unravelled_indices)
             if keepdim:
-                indices.insert(dim, slice(None))  # type: ignore
+                indices = tuple(
+                    indices[idx] if idx != dim else slice(None)
+                    for idx in range(len(indices))
+                )
             else:
                 indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.mean().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(unravelled_indices)] = value
+            new_tensor[unravelled_indices] = value
 
     def MeanBackward0() -> None:
         """Backward pass for the mean operation.
@@ -1074,7 +1087,7 @@ def std(
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
-            shape,
+            shape if shape else (1,),
             dtype=input.dtype,
             requires_grad=input.requires_grad,
         )
@@ -1082,12 +1095,15 @@ def std(
             unravelled_indices = unravel_index(idx, shape)
             indices = list(unravelled_indices)
             if keepdim:
-                indices.insert(dim, slice(None))  # type: ignore
+                indices = tuple(
+                    indices[idx] if idx != dim else slice(None)
+                    for idx in range(len(indices))
+                )
             else:
                 indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.std().item() if isinstance(value, Tensor) else value
-            new_tensor[tuple(unravelled_indices)] = value
+            new_tensor[unravelled_indices] = value
 
     def StdBackward0() -> None:
         """Backward pass for the standard deviation operation.
