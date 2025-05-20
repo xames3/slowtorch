@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Friday, May 16 2025
+Last updated on: Monday, May 19 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -52,6 +52,7 @@ from slowtorch._utils import normal_exp
 from slowtorch._utils import safe_exp
 from slowtorch._utils import safe_max
 from slowtorch._utils import safe_range
+from slowtorch._utils import unravel_index
 
 
 @function_dispatch
@@ -711,10 +712,17 @@ def sum(
     :return: A new tensor containing the sum of the specified elements.
     :raises ValueError: If the specified dimension is invalid.
     """
-    if dim is not None and not (0 <= dim < input.ndim):
-        raise ValueError(f"Invalid dimension {dim} for tensor")
+    ndim = input.ndim
+    if dim is not None:
+        if not (-ndim <= dim < ndim):
+            raise IndexError(
+                "Dimension out of range (expected to be in the range "
+                f"[{-ndim}, {ndim - 1}], but got {dim})"
+            )
+        if dim < 0:
+            dim += ndim
     if dim is None:
-        shape = (1,) if not keepdim else (1,) * input.ndim
+        shape = (1,) if not keepdim else (1,) * ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -724,7 +732,7 @@ def sum(
     else:
         shape = tuple(
             (1 if idx == dim and keepdim else input.shape[idx])
-            for idx in range(input.ndim)
+            for idx in range(ndim)
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
@@ -733,12 +741,15 @@ def sum(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            indices = list((idx,))
-            indices.insert(dim, slice(None))  # type: ignore
+            unravelled_indices = unravel_index(idx, shape)
+            indices = list(unravelled_indices)
+            if keepdim:
+                indices.insert(dim, slice(None))  # type: ignore
+            else:
+                indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.sum().item() if isinstance(value, Tensor) else value
-            dimension = indices if keepdim else (idx,)
-            new_tensor[tuple(dimension)] = value
+            new_tensor[tuple(unravelled_indices)] = value
 
     def SumBackward0() -> None:
         """Backward pass for the sum operation.
@@ -780,10 +791,17 @@ def max(
         elements.
     :raises ValueError: If the specified dimension is invalid.
     """
-    if dim is not None and not (0 <= dim < input.ndim):
-        raise ValueError(f"Invalid dimension {dim} for tensor")
+    ndim = input.ndim
+    if dim is not None:
+        if not (-ndim <= dim < ndim):
+            raise IndexError(
+                "Dimension out of range (expected to be in the range "
+                f"[{-ndim}, {ndim - 1}], but got {dim})"
+            )
+        if dim < 0:
+            dim += ndim
     if dim is None:
-        shape = 1 if not keepdim else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -793,7 +811,7 @@ def max(
     else:
         shape = tuple(
             (1 if idx == dim and keepdim else input.shape[idx])
-            for idx in range(input.ndim)
+            for idx in range(ndim)
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
@@ -802,12 +820,15 @@ def max(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            indices = list((idx,))
-            indices.insert(dim, slice(None))  # type: ignore
+            unravelled_indices = unravel_index(idx, shape)
+            indices = list(unravelled_indices)
+            if keepdim:
+                indices.insert(dim, slice(None))  # type: ignore
+            else:
+                indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.max().item() if isinstance(value, Tensor) else value
-            dimension = indices if keepdim else (idx,)
-            new_tensor[tuple(dimension)] = value
+            new_tensor[tuple(unravelled_indices)] = value
 
     def MaxBackward0() -> None:
         """Backward pass for the maximum operation.
@@ -856,10 +877,17 @@ def min(
         elements.
     :raises ValueError: If the specified dimension is invalid.
     """
-    if dim is not None and not (0 <= dim < input.ndim):
-        raise ValueError(f"Invalid dimension {dim} for tensor")
+    ndim = input.ndim
+    if dim is not None:
+        if not (-ndim <= dim < ndim):
+            raise IndexError(
+                "Dimension out of range (expected to be in the range "
+                f"[{-ndim}, {ndim - 1}], but got {dim})"
+            )
+        if dim < 0:
+            dim += ndim
     if dim is None:
-        shape = 1 if not keepdim else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -869,7 +897,7 @@ def min(
     else:
         shape = tuple(
             (1 if idx == dim and keepdim else input.shape[idx])
-            for idx in range(input.ndim)
+            for idx in range(ndim)
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
@@ -878,12 +906,15 @@ def min(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            indices = list((idx,))
-            indices.insert(dim, slice(None))  # type: ignore
+            unravelled_indices = unravel_index(idx, shape)
+            indices = list(unravelled_indices)
+            if keepdim:
+                indices.insert(dim, slice(None))  # type: ignore
+            else:
+                indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.min().item() if isinstance(value, Tensor) else value
-            dimension = indices if keepdim else (idx,)
-            new_tensor[tuple(dimension)] = value
+            new_tensor[tuple(unravelled_indices)] = value
 
     def MinBackward0() -> None:
         """Backward pass for the minimum operation.
@@ -931,10 +962,17 @@ def mean(
     :return: A new tensor containing the mean of the specified elements.
     :raises ValueError: If the specified dimension is invalid.
     """
-    if dim is not None and not (0 <= dim < input.ndim):
-        raise ValueError(f"Invalid dimension {dim} for tensor")
+    ndim = input.ndim
+    if dim is not None:
+        if not (-ndim <= dim < ndim):
+            raise IndexError(
+                "Dimension out of range (expected to be in the range "
+                f"[{-ndim}, {ndim - 1}], but got {dim})"
+            )
+        if dim < 0:
+            dim += ndim
     if dim is None:
-        shape = 1 if not keepdim else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -944,7 +982,7 @@ def mean(
     else:
         shape = tuple(
             (1 if idx == dim and keepdim else input.shape[idx])
-            for idx in range(input.ndim)
+            for idx in range(ndim)
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
@@ -953,12 +991,15 @@ def mean(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            indices = list((idx,))
-            indices.insert(dim, slice(None))  # type: ignore
+            unravelled_indices = unravel_index(idx, shape)
+            indices = list(unravelled_indices)
+            if keepdim:
+                indices.insert(dim, slice(None))  # type: ignore
+            else:
+                indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.mean().item() if isinstance(value, Tensor) else value
-            dimension = indices if keepdim else (idx,)
-            new_tensor[tuple(dimension)] = value
+            new_tensor[tuple(unravelled_indices)] = value
 
     def MeanBackward0() -> None:
         """Backward pass for the mean operation.
@@ -1009,10 +1050,17 @@ def std(
         specified elements.
     :raises ValueError: If the specified dimension is invalid.
     """
-    if dim is not None and not (0 <= dim < input.ndim):
-        raise ValueError(f"Invalid dimension {dim} for tensor")
+    ndim = input.ndim
+    if dim is not None:
+        if not (-ndim <= dim < ndim):
+            raise IndexError(
+                "Dimension out of range (expected to be in the range "
+                f"[{-ndim}, {ndim - 1}], but got {dim})"
+            )
+        if dim < 0:
+            dim += ndim
     if dim is None:
-        shape = 1 if not keepdim else (1,) * input.ndim
+        shape = 1 if not keepdim else (1,) * ndim
         new_tensor = Tensor(
             shape,
             dtype=input.dtype,
@@ -1022,7 +1070,7 @@ def std(
     else:
         shape = tuple(
             (1 if idx == dim and keepdim else input.shape[idx])
-            for idx in range(input.ndim)
+            for idx in range(ndim)
             if keepdim or idx != dim
         )
         new_tensor = Tensor(
@@ -1031,12 +1079,15 @@ def std(
             requires_grad=input.requires_grad,
         )
         for idx in range(new_tensor.nelement()):
-            indices = list((idx,))
-            indices.insert(dim, slice(None))  # type: ignore
+            unravelled_indices = unravel_index(idx, shape)
+            indices = list(unravelled_indices)
+            if keepdim:
+                indices.insert(dim, slice(None))  # type: ignore
+            else:
+                indices = indices[:dim] + [slice(None)] + indices[dim:]
             value = input[tuple(indices)]
             value = value.std().item() if isinstance(value, Tensor) else value
-            dimension = indices if keepdim else (idx,)
-            new_tensor[tuple(dimension)] = value
+            new_tensor[tuple(unravelled_indices)] = value
 
     def StdBackward0() -> None:
         """Backward pass for the standard deviation operation.

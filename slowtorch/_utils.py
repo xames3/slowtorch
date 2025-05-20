@@ -4,7 +4,7 @@ SlowTorch Utilities API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Wednesday, May 14 2025
+Last updated on: Monday, May 19 2025
 
 This module provides utility classes, functions, and objects that are
 essential to the core operations of SlowTorch. It is intended to
@@ -419,3 +419,18 @@ def _fill_tensor(tensor: Tensor, values: Iterator[float]) -> None:
     else:
         for dim in range(len(tensor)):
             tensor[dim] = next(values)
+
+
+def unravel_index(idx: int, shape: Size | tuple[int, ...]) -> tuple[int, ...]:
+    """Convert a tensor of flat indices into a multi-dimensional
+    index for a given shape.
+
+    :param idx: Index position to unravel.
+    :param shape: The shape of the tensor.
+    :return: A tuple representing the multi-dimensional index.
+    """
+    indices: list[int] = []
+    for dim in reversed(shape):
+        indices.append(idx % dim)
+        idx = idx // dim
+    return tuple(reversed(indices))

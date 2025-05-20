@@ -1293,22 +1293,6 @@ class Tensor:
 
     ravel = flatten
 
-    def unravel_index(
-        self,
-        shape: Size | tuple[builtins.int, ...],
-    ) -> tuple[Tensor, ...]:
-        """Convert a tensor of flat indices into a multi-dimensional
-        index for a given shape.
-
-        :param shape: The shape of the tensor.
-        :return: A tuple representing the multi-dimensional index.
-        """
-        indices: list[Tensor] = []
-        for dim in reversed(shape):
-            indices.append(self % dim)
-            self = self // dim
-        return tuple(reversed(indices))
-
     def view_(
         self,
         shape: Size | tuple[builtins.int, ...],
