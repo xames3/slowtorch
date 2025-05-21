@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, May 16 2025
+Last updated on: Tuesday, May 20 2025
 
 Tensor object.
 
@@ -423,7 +423,7 @@ class Tensor:
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __int__(self) -> None | float:
+    def __int__(self) -> None | builtins.int:
         """Convert the tensor to a scalar int if it has exactly one
         element.
 
@@ -436,7 +436,7 @@ class Tensor:
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __bool__(self) -> None | float:
+    def __bool__(self) -> None | builtins.bool:
         """Convert the tensor to a scalar bool if it has exactly one
         element.
 
@@ -1616,12 +1616,17 @@ class Tensor:
                 node.grad_fn()
         self.grad = None
 
-    def log(self) -> Tensor:
-        """Return a new tensor with the natural logarithm of the elements
-        of input.
+    def detach(self) -> Tensor:
+        """Return a new tensor without requiring gradients."""
+        self.requires_grad = False
+        return self
 
-        This method creates a new `Tensor` instance with the same shape and
-        as the original tensor but with natural logarithm calculated.
+    def log(self) -> Tensor:
+        """Return a new tensor with the natural log of the elements of
+        input.
+
+        This method creates a new `Tensor` instance with the same shape
+        and as the original tensor but with natural log calculated.
 
         :return: A new tensor with the log calculated data and shape.
         """
