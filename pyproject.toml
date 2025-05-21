@@ -65,6 +65,26 @@ module = [
 ]
 disable_error_code = [ "assignment", "method-assign", "name-defined" ]
 
+[tool.pytest.ini_options]
+addopts = "--html=reports/reports.html --self-contained-html --cov=slowtorch --cov-report=html"
+testpaths = [ "tests" ]
+
+[tool.coverage.run]
+branch = true
+source = [ "slowtorch" ]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:"
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
 [tool.tox]
 requires = [ "tox>=4" ]
 envlist = [ "py313", "py312", "py311", "py310" ]
@@ -78,6 +98,12 @@ deps = [
   "isort",
   "mypy",
   "mypy-extensions",
+  "numpy",
+  "pytest",
+  "pytest-cov",
+  "pytest-html",
+  "coverage[toml]",
+  "torch",
   "typing_extensions",
 ]
 commands = [
@@ -85,4 +111,5 @@ commands = [
   [ "flake8", {replace = "posargs", default = ["slowtorch/"], extend = true}, "--per-file-ignores", "__init__.py:F403,F405,E402", "--ignore", "E203,W503" ],
   [ "isort", "--sl", {replace = "posargs", default = ["slowtorch/"], extend = true} ],
   [ "mypy", {replace = "posargs", default = ["slowtorch/"], extend = true} ],
+  [ "pytest", "-v", "-rA", "--tb=short" ]
 ]
