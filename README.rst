@@ -1,6 +1,6 @@
 .. Author: Akshay Mestry <xa@mes3.dev>
 .. Created on: Thursday, October 10 2024
-.. Last updated on: Sunday, May 18 2025
+.. Last updated on: Tuesday, May 20 2025
 
 .. figure:: https://github.com/xames3/slowtorch/blob/main/slowtorch-logo.png
     :alt: SlowTorch Logo
@@ -824,7 +824,7 @@ This project is inspired by the remarkable work done by the `PyTorch
 Development Team`_. It is a tribute to their contributions to the field of
 machine learning and the open-source community at large.
 
-**NOTE:** This project also takes massive inspiration from excellent work done
+**Note.** This project also takes massive inspiration from excellent work done
 by `Andrej Karpathy`_ in his `micrograd`_ project.
 
 -------------------------------------------------------------------------------

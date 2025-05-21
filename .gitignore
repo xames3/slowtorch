@@ -139,4 +139,5 @@ venv/
 
 # My mess
 archive/*
+reports/*
 *.bak
