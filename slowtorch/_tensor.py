@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, May 20 2025
+Last updated on: Wednesday, May 21 2025
 
 Tensor object.
 
@@ -1603,7 +1603,7 @@ class Tensor:
 
         def iter_graph(inputs: tuple[Tensor, ...] | Tensor) -> None:
             """Recursive function to traverse the computation graph."""
-            if inputs not in seen:
+            if inputs is not None and inputs not in seen:
                 seen.add(inputs)
                 if hasattr(inputs.grad_fn, "inputs"):
                     for input in inputs.grad_fn.inputs:

@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Tuesday, May 20 2025
+Last updated on: Wednesday, May 21 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -1531,13 +1531,12 @@ def linear(
         Computes gradients for the `input`, `weight`, and `bias` tensors
         and propagates them backward through the computational graph.
         """
-        if None in (input.grad, weight.grad, bias.grad):
-            input.grad = weight.grad = bias.grad = Tensor(
-                input.shape, input.dtype
-            )
+        if None in (input.grad, weight.grad):
+            input.grad = weight.grad = Tensor(1, input.dtype)
         input.grad += new_tensor.grad @ weight
         weight.grad += new_tensor.grad.T @ input
         if bias is not None:
+            bias.grad = Tensor(bias.shape, bias.dtype)
             bias.grad += new_tensor.grad.sum(dim=0)
 
     new_tensor.grad_fn = Node(AddmmBackward0)
