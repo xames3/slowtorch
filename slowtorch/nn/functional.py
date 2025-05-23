@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Wednesday, May 21 2025
+Last updated on: Friday, May 23 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -72,37 +72,27 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
     :raises ValueError: If `other` is a tensor but its shape
         doesn't match `input.shape`.
     """
-    new_tensor: Tensor
     if isinstance(other, Number):
-        dtype = (
-            slowtorch.float32
-            if isinstance(other, float) or input.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        new_tensor = Tensor(
-            input.shape,
-            dtype,
-            requires_grad=input.requires_grad,
-        )
-        new_tensor[:] = (data + other for data in input.storage)
-    elif isinstance(other, Tensor):
-        dtype = (
-            slowtorch.float32
-            if input.dtype.name.startswith("float")
-            or other.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        shape = broadcast_shapes(input.shape, other.shape)
-        input = input.broadcast_to(shape)
-        other = other.broadcast_to(shape)
-        requires_grad = input.requires_grad or other.requires_grad
-        new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = (x + y for x, y in zip(input._flat, other._flat))
-    else:
+        scalar = other
+        other = Tensor(1, input.dtype, requires_grad=input.requires_grad)
+        other[:] = scalar
+    elif not isinstance(other, Tensor):
         raise TypeError(
             f"Unsupported operand type(s) for +: {type(input).__name__!r} "
             f"and {type(other).__name__!r}"
         )
+    dtype = (
+        slowtorch.float32
+        if input.dtype.name.startswith("float")
+        or other.dtype.name.startswith("float")
+        else slowtorch.int64
+    )
+    shape = broadcast_shapes(input.shape, other.shape)
+    input = input.broadcast_to(shape)
+    other = other.broadcast_to(shape)
+    requires_grad = input.requires_grad or other.requires_grad
+    new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+    new_tensor[:] = (x + y for x, y in zip(input._flat, other._flat))
 
     def AddBackward0() -> None:
         """Backpropagation implementation for addition.
@@ -113,8 +103,9 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
         if None in (input.grad, other.grad):
             input.grad = Tensor(input.shape, dtype)
             other.grad = Tensor(input.shape, dtype)
-        input.grad += new_tensor.grad
-        other.grad += new_tensor.grad
+        grad = new_tensor.grad
+        input.grad += grad
+        other.grad += grad
 
     new_tensor.grad_fn = Node(AddBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -139,37 +130,27 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
     :raises ValueError: If `other` is a tensor but its shape
         doesn't match `input.shape`.
     """
-    new_tensor: Tensor
     if isinstance(other, Number):
-        dtype = (
-            slowtorch.float32
-            if isinstance(other, float) or input.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        new_tensor = Tensor(
-            input.shape,
-            dtype,
-            requires_grad=input.requires_grad,
-        )
-        new_tensor[:] = (data - other for data in input.storage)
-    elif isinstance(other, Tensor):
-        dtype = (
-            slowtorch.float32
-            if input.dtype.name.startswith("float")
-            or other.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        shape = broadcast_shapes(input.shape, other.shape)
-        input = input.broadcast_to(shape)
-        other = other.broadcast_to(shape)
-        requires_grad = input.requires_grad or other.requires_grad
-        new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = (x - y for x, y in zip(input._flat, other._flat))
-    else:
+        scalar = other
+        other = Tensor(1, input.dtype, requires_grad=input.requires_grad)
+        other[:] = scalar
+    elif not isinstance(other, Tensor):
         raise TypeError(
             f"Unsupported operand type(s) for -: {type(input).__name__!r} "
             f"and {type(other).__name__!r}"
         )
+    dtype = (
+        slowtorch.float32
+        if input.dtype.name.startswith("float")
+        or other.dtype.name.startswith("float")
+        else slowtorch.int64
+    )
+    shape = broadcast_shapes(input.shape, other.shape)
+    input = input.broadcast_to(shape)
+    other = other.broadcast_to(shape)
+    requires_grad = input.requires_grad or other.requires_grad
+    new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+    new_tensor[:] = (x - y for x, y in zip(input._flat, other._flat))
 
     def SubBackward0() -> None:
         """Backpropagation implementation for subtraction.
@@ -180,8 +161,9 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
         if None in (input.grad, other.grad):
             input.grad = Tensor(input.shape, dtype)
             other.grad = Tensor(input.shape, dtype)
-        input.grad += new_tensor.grad
-        other.grad -= new_tensor.grad
+        grad = new_tensor.grad
+        input.grad += grad
+        other.grad -= grad
 
     new_tensor.grad_fn = Node(SubBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -206,37 +188,27 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
     :raises ValueError: If `other` is a tensor but its shape
         doesn't match `input.shape`.
     """
-    new_tensor: Tensor
     if isinstance(other, Number):
-        dtype = (
-            slowtorch.float32
-            if isinstance(other, float) or input.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        new_tensor = Tensor(
-            input.shape,
-            dtype,
-            requires_grad=input.requires_grad,
-        )
-        new_tensor[:] = (data * other for data in input.storage)
-    elif isinstance(other, Tensor):
-        dtype = (
-            slowtorch.float32
-            if input.dtype.name.startswith("float")
-            or other.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        shape = broadcast_shapes(input.shape, other.shape)
-        input = input.broadcast_to(shape)
-        other = other.broadcast_to(shape)
-        requires_grad = input.requires_grad or other.requires_grad
-        new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = (x * y for x, y in zip(input._flat, other._flat))
-    else:
+        scalar = other
+        other = Tensor(1, input.dtype, requires_grad=input.requires_grad)
+        other[:] = scalar
+    elif not isinstance(other, Tensor):
         raise TypeError(
             f"Unsupported operand type(s) for *: {type(input).__name__!r} "
             f"and {type(other).__name__!r}"
         )
+    dtype = (
+        slowtorch.float32
+        if input.dtype.name.startswith("float")
+        or other.dtype.name.startswith("float")
+        else slowtorch.int64
+    )
+    shape = broadcast_shapes(input.shape, other.shape)
+    input = input.broadcast_to(shape)
+    other = other.broadcast_to(shape)
+    requires_grad = input.requires_grad or other.requires_grad
+    new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+    new_tensor[:] = (x * y for x, y in zip(input._flat, other._flat))
 
     def MulBackward0() -> None:
         """Backpropagation implementation for multiplication.
@@ -247,8 +219,9 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
         if None in (input.grad, other.grad):
             input.grad = Tensor(input.shape, dtype)
             other.grad = Tensor(input.shape, dtype)
-        input.grad += other * new_tensor.grad
-        other.grad += input * new_tensor.grad
+        grad = new_tensor.grad
+        input.grad += other * grad
+        other.grad += input * grad
 
     new_tensor.grad_fn = Node(MulBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -279,39 +252,33 @@ def div(
     :raises ValueError: If `other` is a tensor but its shape
         doesn't match `input.shape`.
     """
-    new_tensor: Tensor
     data: list[Number] = []
     if isinstance(other, Number):
-        for idx in input.storage:
-            try:
-                data.append(
-                    idx // other if rounding_mode == "floor" else idx / other
-                )
-            except ZeroDivisionError:
-                data.append(builtins.float("inf"))
-        new_tensor = Tensor(
-            input.shape,
-            input.dtype,
-            requires_grad=input.requires_grad,
-        )
-        new_tensor[:] = data
-    elif isinstance(other, Tensor):
-        shape = broadcast_shapes(input.shape, other.shape)
-        input = input.broadcast_to(shape)
-        other = other.broadcast_to(shape)
-        requires_grad = input.requires_grad or other.requires_grad
-        new_tensor = Tensor(shape, input.dtype, requires_grad=requires_grad)
-        for x, y in zip(input._flat, other._flat):
-            try:
-                data.append(x // y if rounding_mode == "floor" else x / y)
-            except ZeroDivisionError:
-                data.append(builtins.float("inf"))
-        new_tensor[:] = data
-    else:
+        scalar = other
+        other = Tensor(1, slowtorch.float32, requires_grad=input.requires_grad)
+        other[:] = scalar
+    elif not isinstance(other, Tensor):
         raise TypeError(
             f"Unsupported operand type(s) for /: {type(input).__name__!r} "
             f"and {type(other).__name__!r}"
         )
+    dtype = (
+        slowtorch.float32
+        if input.dtype.name.startswith("float")
+        or other.dtype.name.startswith("float")
+        else slowtorch.int64
+    )
+    shape = broadcast_shapes(input.shape, other.shape)
+    input = input.broadcast_to(shape)
+    other = other.broadcast_to(shape)
+    requires_grad = input.requires_grad or other.requires_grad
+    new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+    for x, y in zip(input._flat, other._flat):
+        try:
+            data.append(x // y if rounding_mode == "floor" else x / y)
+        except ZeroDivisionError:
+            data.append(builtins.float("inf"))
+    new_tensor[:] = data
 
     def DivBackward0() -> None:
         """Backpropagation implementation for division.
@@ -322,8 +289,9 @@ def div(
         if None in (input.grad, other.grad):
             input.grad = Tensor(input.shape, slowtorch.float32)
             other.grad = Tensor(input.shape, slowtorch.float32)
-        input.grad += new_tensor.grad / other
-        other.grad -= (input / (other * other)) * new_tensor.grad
+        grad = new_tensor.grad
+        input.grad += grad / other
+        other.grad -= (input / (other * other)) * grad
 
     new_tensor.grad_fn = Node(DivBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -346,7 +314,7 @@ def neg(input: Tensor) -> Tensor:
         input.dtype,
         requires_grad=input.requires_grad,
     )
-    new_tensor[:] = (data * -1 for data in input.storage)
+    new_tensor[:] = (data * -1 for data in input._flat)
 
     def NegBackward0() -> None:
         """Backpropagation implementation for negation.
@@ -446,8 +414,9 @@ def matmul(input: Tensor, other: Tensor) -> Tensor:
         if None in (input.grad, other.grad):
             input.grad = Tensor(input.shape, dtype)
             other.grad = Tensor(input.shape, dtype)
-        input.grad += new_tensor.grad @ other
-        other.grad += input @ new_tensor.grad
+        grad = new_tensor.grad
+        input.grad += grad @ other
+        other.grad += input @ grad
 
     new_tensor.grad_fn = Node(DotBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -472,37 +441,27 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
     :raises ValueError: If `other` is a tensor but its shape
         doesn't match `input.shape`.
     """
-    new_tensor: Tensor
     if isinstance(other, Number):
-        dtype = (
-            slowtorch.float32
-            if isinstance(other, float) or input.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        new_tensor = Tensor(
-            input.shape,
-            dtype,
-            requires_grad=input.requires_grad,
-        )
-        new_tensor[:] = (data % other for data in input.storage)
-    elif isinstance(other, Tensor):
-        dtype = (
-            slowtorch.float32
-            if input.dtype.name.startswith("float")
-            or other.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        shape = broadcast_shapes(input.shape, other.shape)
-        input = input.broadcast_to(shape)
-        other = other.broadcast_to(shape)
-        requires_grad = input.requires_grad or other.requires_grad
-        new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = (x % y for x, y in zip(input._flat, other._flat))
-    else:
+        scalar = other
+        other = Tensor(1, input.dtype, requires_grad=input.requires_grad)
+        other[:] = scalar
+    elif not isinstance(other, Tensor):
         raise TypeError(
             f"Unsupported operand type(s) for %: {type(input).__name__!r} "
             f"and {type(other).__name__!r}"
         )
+    dtype = (
+        slowtorch.float32
+        if input.dtype.name.startswith("float")
+        or other.dtype.name.startswith("float")
+        else slowtorch.int64
+    )
+    shape = broadcast_shapes(input.shape, other.shape)
+    input = input.broadcast_to(shape)
+    other = other.broadcast_to(shape)
+    requires_grad = input.requires_grad or other.requires_grad
+    new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+    new_tensor[:] = (x % y for x, y in zip(input._flat, other._flat))
 
     def RemainderBackward0() -> None:
         """Backpropagation implementation for modulo operation.
@@ -513,8 +472,9 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
         if None in (input.grad, other.grad):
             input.grad = Tensor(input.shape, dtype)
             other.grad = Tensor(input.shape, dtype)
-        input.grad += new_tensor.grad
-        other.grad -= (input // other) * new_tensor.grad
+        grad = new_tensor.grad
+        input.grad += grad
+        other.grad -= (input // other) * grad
 
     new_tensor.grad_fn = Node(RemainderBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -539,37 +499,27 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
     :raises ValueError: If `other` is a tensor but its shape
         doesn't match `input.shape`.
     """
-    new_tensor: Tensor
     if isinstance(other, Number):
-        dtype = (
-            slowtorch.float32
-            if isinstance(other, float) or input.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        new_tensor = Tensor(
-            input.shape,
-            dtype,
-            requires_grad=input.requires_grad,
-        )
-        new_tensor[:] = (data**other for data in input.storage)
-    elif isinstance(other, Tensor):
-        dtype = (
-            slowtorch.float32
-            if input.dtype.name.startswith("float")
-            or other.dtype.name.startswith("float")
-            else slowtorch.int64
-        )
-        shape = broadcast_shapes(input.shape, other.shape)
-        input = input.broadcast_to(shape)
-        other = other.broadcast_to(shape)
-        requires_grad = input.requires_grad or other.requires_grad
-        new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        new_tensor[:] = (x**y for x, y in zip(input._flat, other._flat))
-    else:
+        scalar = other
+        other = Tensor(1, input.dtype, requires_grad=input.requires_grad)
+        other[:] = scalar
+    elif not isinstance(other, Tensor):
         raise TypeError(
             f"Unsupported operand type(s) for **: {type(input).__name__!r} "
             f"and {type(other).__name__!r}"
         )
+    dtype = (
+        slowtorch.float32
+        if input.dtype.name.startswith("float")
+        or other.dtype.name.startswith("float")
+        else slowtorch.int64
+    )
+    shape = broadcast_shapes(input.shape, other.shape)
+    input = input.broadcast_to(shape)
+    other = other.broadcast_to(shape)
+    requires_grad = input.requires_grad or other.requires_grad
+    new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
+    new_tensor[:] = (x**y for x, y in zip(input._flat, other._flat))
 
     def PowBackward0() -> None:
         """Backpropagation implementation for exponentiation.
@@ -600,8 +550,8 @@ def log(input: Tensor) -> Tensor:
     """
     shape, requires_grad = input.shape, input.requires_grad
     new_tensor = Tensor(shape, slowtorch.float32, requires_grad=requires_grad)
-    data = []
-    for idx in input.storage:
+    data: list[Number] = []
+    for idx in input._flat:
         try:
             data.append(math.log(idx))
         except ValueError:
@@ -653,6 +603,32 @@ def clone(input: Tensor) -> Tensor:
             input.grad = new_tensor.grad
 
     new_tensor.grad_fn = Node(CloneBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
+def ravel(input: Tensor) -> Tensor:
+    """Return a contiguous flattened tensor.
+
+    This method creates a copy of the tensor collapsed into one
+    dimension.
+
+    :param input: Input tensor to be flattened.
+    :return: A new tensor with the same data, and type as the original
+        tensor but in 1-D.
+    """
+    new_tensor = input.ravel()
+
+    def ViewBackward0() -> None:
+        """Backpropagation implementation for cloning.
+
+        Computes gradient for `input` and propagate it.
+        """
+        if not hasattr(input, "grad") or input.grad is None:
+            input.grad = new_tensor.grad
+
+    new_tensor.grad_fn = Node(ViewBackward0)
     new_tensor.grad_fn.inputs = (input,)
     return new_tensor
 
@@ -858,7 +834,7 @@ def max(
             ):
                 indices = list(idx)
                 if keepdim:
-                    indices[dim] = slice(None)  # type: ignore
+                    indices[dim] = slice(None)
                 else:
                     indices.insert(dim, slice(None))  # type: ignore
                 indices = tuple(indices)
@@ -962,7 +938,7 @@ def min(
             ):
                 indices = list(idx)
                 if keepdim:
-                    indices[dim] = slice(None)  # type: ignore
+                    indices[dim] = slice(None)
                 else:
                     indices.insert(dim, slice(None))  # type: ignore
                 indices = tuple(indices)
@@ -1062,7 +1038,7 @@ def mean(
             ):
                 indices = list(idx)
                 if keepdim:
-                    indices[dim] = slice(None)  # type: ignore
+                    indices[dim] = slice(None)
                 else:
                     indices.insert(dim, slice(None))  # type: ignore
                 indices = tuple(indices)
@@ -1158,8 +1134,6 @@ def std(
         """
         if not hasattr(input, "grad") or input.grad is None:
             input.grad = Tensor(input.shape, input.dtype)
-        if not hasattr(input, "grad") or input.grad is None:
-            input.grad = Tensor(input.shape, input.dtype)
         if dim is None:
             mu = input.mean()
             N = input.nelement()
@@ -1173,7 +1147,7 @@ def std(
             ):
                 indices = list(idx)
                 if keepdim:
-                    indices[dim] = slice(None)  # type: ignore
+                    indices[dim] = slice(None)
                 else:
                     indices.insert(dim, slice(None))  # type: ignore
                 indices = tuple(indices)
@@ -1254,7 +1228,7 @@ def sqrt(input: Tensor) -> Tensor:
         requires_grad=input.requires_grad,
     )
     data: list[Number] = []
-    for idx in input.storage:
+    for idx in input._flat:
         result = idx**0.5
         data.append(slowtorch.nan if isinstance(result, complex) else result)
     new_tensor[:] = data
@@ -1555,10 +1529,10 @@ def mse_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     :param input: The input tensor representing predictions.
     :param target: The target tensor representing true values.
     :param reduction: The reduction function to apply to the computed
-        loss. Options are:
-        - `mean`: Return the average of the squared differences.
-        - `sum`: Return the sum of the squared differences.
-        - `none`: Return the squared differences without reduction.
+        loss. Options are::
+            - `mean`: Return the average of the squared differences.
+            - `sum`: Return the sum of the squared differences.
+            - `none`: Return the squared differences without reduction.
         Defaults to `mean`.
     :return: A scalar tensor representing the MSE loss.
     """

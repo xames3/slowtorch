@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Wednesday, May 21 2025
+Last updated on: Friday, May 23 2025
 
 Tensor object.
 
@@ -27,15 +27,20 @@ class introduces a Pythonic, educational perspective, making it suitable
 for learning and experimentation with tensor mechanics without relying
 on external libraries.
 
-As of now, the module supports features such as::
+The module supports features such as::
 
     - Efficient storage and representation of n-dimensional data.
+    - The primary `Tensor` object supports auto-differentiation.
     - Flexible shape manipulation, including reshaping and broadcasting.
     - Element-wise operations, including arithmetic, logical, and
       comparison operations, via rich operator overloading.
     - Slicing and indexing support for intuitive data access.
     - Conversion utilities to export data to native Python types
       (e.g., lists).
+    - Tensor based operations such as unsqueezing,, clamping, reshaping,
+      transposing, cloning, etc.
+    - Linear algebraic operations such as calulating maximum, minimum,
+      mean, standard deviation, exponent, log, square root etc.
 
 The `Tensor` implementation draws inspiration from PyTorch's
 architecture but deliberately simplifies and reimagines certain aspects
@@ -59,6 +64,7 @@ from __future__ import annotations
 
 import builtins
 import ctypes
+import itertools
 import pickle
 import types
 import typing as t
@@ -164,7 +170,10 @@ class Node:
     def __init__(self, backward: None | t.Callable[..., t.Any] = None) -> None:
         """Initialise a `Node` instance."""
         self.backward = backward
-        self.name = backward.__name__ if backward else None
+
+    def name(self) -> str:
+        """Return the name."""
+        return self.backward.__name__ if self.backward else ""
 
     def __call__(self) -> None:
         """Execute the gradient function for this node, if defined.
@@ -343,8 +352,8 @@ class Tensor:
         extra = ""
         if self.requires_grad:
             try:
-                if self.grad_fn.name:
-                    extra = f", grad_fn=<{self.grad_fn.name}>"
+                if self.grad_fn.name():
+                    extra = f", grad_fn=<{self.grad_fn.name()}>"
                 else:
                     extra = ", requires_grad=True"
             except AttributeError:
@@ -540,7 +549,7 @@ class Tensor:
             array_like = list(value)
         else:
             if not isinstance(value, Tensor):
-                value = Tensor(  # type: ignore
+                value = Tensor(
                     value,
                     self.dtype,
                     self.device,
@@ -581,12 +590,22 @@ class Tensor:
         """Broadcast the tensor to the target shape."""
         if self.shape == size:
             return self
-        if len(size) < len(self.shape):
+        if len(size) < len(self.shape) or (len(size) - len(self.shape) < 0):
             raise ValueError(f"Cannot broadcast {self.shape} to {size}")
-        data = self.storage[:]
-        for idx in range(len(size)):
-            if idx >= len(self.shape) or self.shape[idx] == 1:
-                data = data * size[idx]
+        padded = (1,) * (len(size) - len(self.shape)) + self.shape
+        for idx, (pad, target) in enumerate(zip(padded, size)):
+            if pad != target and pad != 1:
+                raise ValueError(
+                    f"Cannot broadcast {self.shape} to {size} at dimension "
+                    f"{idx}"
+                )
+        data = []
+        for idx in itertools.product(*(range(dim) for dim in size)):
+            index = tuple(
+                0 if pdx == 1 else jdx for jdx, pdx in zip(idx, padded)
+            )
+            base = sum(bdx * sdx for bdx, sdx in zip(index, self.stride()))
+            data.append(self.storage[base])
         new_tensor = Tensor(size, self.dtype, requires_grad=self.requires_grad)
         new_tensor.storage = data
         return new_tensor
@@ -618,8 +637,8 @@ class Tensor:
         return self.__add__(other)
 
     def __sub__(self, other: Number | Tensor) -> Tensor:
-        """Perform element-wise subtraction of the tensor with a scalar or
-        another tensor.
+        """Perform element-wise subtraction of the tensor with a scalar
+        or another tensor.
 
         This method supports subtraction with scalars (int or float) and
         other tensors of the same shape. The resulting tensor is of the
@@ -644,15 +663,15 @@ class Tensor:
         return self.__sub__(other)
 
     def __mul__(self, other: Number | Tensor) -> Tensor:
-        """Perform element-wise multiplication of the tensor with a scalar or
-        another tensor.
+        """Perform element-wise multiplication of the tensor with a
+        scalar or another tensor.
 
-        This method supports multiplication with scalars (int or float) and
-        other tensors of the same shape. The resulting tensor is of the
-        same shape and dtype as the input.
+        This method supports multiplication with scalars (int or float)
+        and other tensors of the same shape. The resulting tensor is of
+        the same shape and dtype as the input.
 
-        :param other: The operand for multiplication. Can be a scalar or an
-            tensor of the same shape.
+        :param other: The operand for multiplication. Can be a scalar or
+            an tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             multiplication.
         :raises TypeError: If `other` is neither a scalar nor a tensor.
@@ -1603,7 +1622,7 @@ class Tensor:
 
         def iter_graph(inputs: tuple[Tensor, ...] | Tensor) -> None:
             """Recursive function to traverse the computation graph."""
-            if inputs is not None and inputs not in seen:
+            if isinstance(inputs, Tensor) and inputs not in seen:
                 seen.add(inputs)
                 if hasattr(inputs.grad_fn, "inputs"):
                     for input in inputs.grad_fn.inputs:
@@ -1794,13 +1813,14 @@ class Tensor:
     def sqrt(self) -> Tensor:
         """Perform element-wise square root of a tensor.
 
-        This function computes the square root of each element in the input
-        tensor. The result is returned as a new tensor, and gradients are
-        properly propagated during backpropagation.
+        This function computes the square root of each element in the
+        input tensor. The result is returned as a new tensor, and
+        gradients are properly propagated during backpropagation.
 
         :return: A new tensor containing the square root of each element
             in the input tensor.
-        :raises ValueError: If the input tensor contains negative values.
+        :raises ValueError: If the input tensor contains negative
+            values.
         """
         return slowtorch.nn.functional.sqrt(self)
 
@@ -1854,8 +1874,8 @@ class Tensor:
         """Apply the Sigmoid function element-wise.
 
         Sigmoid function squashes between 0 and 1. This operation is
-        differentiable, and gradients are propagated. The sigmoid function
-        is defined as::
+        differentiable, and gradients are propagated. The sigmoid
+        function is defined as::
 
             sigmoid(x) = 1 / (1 + exp(-x))
 
