@@ -1884,6 +1884,26 @@ class Tensor:
         """
         return slowtorch.nn.functional.sigmoid(self)
 
+    def softmax(
+        self,
+        dim: None | builtins.int = None,
+        dtype: None | Dtype = None,
+    ) -> Tensor:
+        """Apply the Softmax function element-wise.
+
+        Softmax function squashes between 0 and 1, along the provided
+        dimension and sum to 1. This operation is differentiable, and
+        gradients are propagated. The softmax function is defined as::
+
+            softmax(x) = exp(x) / exp(x).sum()
+
+        :param dim: A dimension along which softmax will be computed,
+            defaults to `None`.
+        :return: Output tensor after applying the Softmax function, with
+            gradients linked for backpropagation.
+        """
+        return slowtorch.nn.functional.softmax(self, dim=dim, dtype=dtype)
+
 
 @set_module("slowtorch")
 @function_dispatch

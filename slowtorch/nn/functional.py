@@ -47,6 +47,7 @@ from slowtorch import function_dispatch
 from slowtorch._tensor import Node
 from slowtorch._tensor import Tensor
 from slowtorch._types import Number
+from slowtorch._utils import Dtype
 from slowtorch._utils import broadcast_shapes
 from slowtorch._utils import normal_exp
 from slowtorch._utils import safe_exp
@@ -1464,6 +1465,65 @@ def sigmoid(input: Tensor) -> Tensor:
         input.grad -= (new_tensor * (1 - new_tensor)) * new_tensor.grad
 
     new_tensor.grad_fn = Node(SigmoidBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
+def softmax(
+    input: Tensor,
+    dim: None | int = None,
+    dtype: None | Dtype = None,
+) -> Tensor:
+    """Apply the Softmax function element-wise.
+
+    Softmax function squashes between 0 and 1, along the provided
+    dimension and sum to 1. This operation is differentiable, and
+    gradients are propagated. The softmax function is defined as::
+
+        softmax(x) = exp(x) / exp(x).sum()
+
+    :param input: Input tensor to which Softmax is to be applied.
+    :param dim: A dimension along which softmax will be computed,
+        defaults to `None`.
+    :return: Output tensor after applying the Softmax function, with
+        gradients linked for backpropagation.
+    """
+    new_tensor = Tensor(
+        input.shape,
+        dtype or input.dtype,
+        requires_grad=input.requires_grad,
+    )
+    numerator = (input - input.max(dim=dim, keepdim=True)).exp()
+    denominator = numerator.sum(dim=dim, keepdim=True)
+    new_tensor[:] = numerator / denominator
+
+    def SoftmaxBackward0() -> None:
+        """Backpropagation implementation for Softmax.
+
+        Computes gradients for `input` tensor and propagates them. The
+        sigmoid gradient is defined as::
+
+            softmax'(x) = (
+                softmax(x_i) * (1 - softmax(x_j))
+                    if i == j
+                    else
+                -softmax(x_j) * softmax(x_1)
+            )
+
+        .. seealso::
+
+            [1] https://eli.thegreenplace.net/2016/
+                the-softmax-function-and-its-derivative/
+        """
+        if not hasattr(input, "grad") or input.grad is None:
+            input.grad = Tensor(input.shape, input.dtype)
+        input.grad += new_tensor * (
+            new_tensor.grad
+            - (new_tensor.grad * new_tensor).sum(dim=dim, keepdim=True)
+        )
+
+    new_tensor.grad_fn = Node(SoftmaxBackward0)
     new_tensor.grad_fn.inputs = (input,)
     return new_tensor
 
