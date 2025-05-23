@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Thursday, May 15 2025
+Last updated on: Friday, May 23 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -578,8 +578,8 @@ class Sigmoid(Module):
         :param input: The input tensor to be transformed, of arbitrary
             shape.
         :return: A new tensor where each element is the result of the
-            Sigmoid operation applied to the corresponding element of the
-            input tensor.
+            Sigmoid operation applied to the corresponding element of
+            the input tensor.
         """
         return slowtorch.nn.functional.sigmoid(input)
 
