@@ -68,6 +68,7 @@ import itertools
 import pickle
 import types
 import typing as t
+from collections import OrderedDict
 from collections.abc import Iterable
 
 import slowtorch
@@ -1634,6 +1635,107 @@ class Tensor:
             if node.grad_fn is not None and callable(node.grad_fn):
                 node.grad_fn()
         self.grad = None
+
+    def render(self, show_dtype: builtins.bool = False) -> None:
+        """Render the backward computation graph of the tensor as an
+        ASCII tree.
+
+        This method recursively traverses the autograd graph in
+        post-order, assigns a unique identifier to each node, and prints
+        out an aligned, human-readable tree with tensor's metadata and
+        nodes.
+
+        Leaf tensors are denoted explicitly, and previously visited
+        nodes are marked to indicate reuse in shared computation paths.
+
+        :param show_dtype: Flag to display dtype, defaults to `False`.
+
+        .. note::
+
+            - Nodes are uniquely numbered using post-order traversal,
+              ensuring a consistent inside-out visual structure.
+        """
+        seen: set[int] = set()
+        shown: set[int] = set()
+        counter: list[int] = [1]
+        tensors: OrderedDict[int, list[int]] = OrderedDict()
+
+        def set_id(input: Tensor) -> None:
+            """Set unique ID to each node using post-order traversal."""
+            if input is None or id(input) in seen:
+                return
+            seen.add(id(input))
+            if (
+                hasattr(input, "grad_fn")
+                and input.grad_fn
+                and hasattr(input.grad_fn, "inputs")
+            ):
+                for _input in input.grad_fn.inputs:
+                    set_id(_input)
+            tensors[id(input)] = counter[0]
+            counter[0] += 1
+
+        set_id(self)
+
+        def get_id(input: Tensor) -> t.Any:
+            """Return ID for a tensor, or -1 if unregistered."""
+            return tensors.get(id(input), -1)
+
+        def is_leaf(input: Tensor) -> builtins.bool:
+            """Determine if a tensor is a leaf in the autograd graph."""
+            return not (
+                hasattr(input, "grad_fn")
+                and input.grad_fn
+                and hasattr(input.grad_fn, "inputs")
+                and input.grad_fn.inputs
+            )
+
+        def iter_graph(
+            input: Tensor,
+            indent: str = "",
+            is_last: builtins.bool = True,
+            is_root: builtins.bool = True,
+        ) -> None:
+            """
+            Recursively render the computation graph as an ASCII tree.
+
+            :param input: Tensor for which the backward graph is to be
+                visualised.
+            :param indent: indent string used for indentation and
+                continuation lines, defaults to ``.
+            :param is_last: Flag indicating whether this node is the
+                last among its siblings, defaults to `True`.
+            :param is_root: Flag indicating if this node is the root of
+                the tree, defaults to `True`.
+            """
+            if input is None:
+                return
+            branch = "└──► " if is_last or is_leaf(input) else "├──► "
+            if not is_last and get_id(input) == 1:
+                branch = "├──► "
+            prefix = indent + branch
+            if is_root:
+                prefix = ""
+            dtype = f", dtype={input.dtype}" if show_dtype else ""
+            shape = getattr(input, "_shape", "?")
+            label = f"Tensor#{get_id(input)}(shape={shape}{dtype})"
+            if id(input) in shown:
+                print(prefix + label + " [already seen]")
+                return
+            else:
+                print(prefix + label)
+            shown.add(id(input))
+            if not is_leaf(input):
+                outer = indent + ("     " if is_last else "│    ")
+                print(outer + f"{input.grad_fn.name()}")
+                inputs = input.grad_fn.inputs
+                for idx, _input in enumerate(inputs):
+                    is_last_input = idx == len(inputs) - 1
+                    inner = indent + ("     " if is_last else "│    ")
+                    iter_graph(_input, inner, is_last_input, is_root=False)
+
+        iter_graph(self)
+        print()
 
     def detach(self) -> Tensor:
         """Return a new tensor without requiring gradients."""
