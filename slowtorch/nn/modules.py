@@ -67,6 +67,7 @@ __all__: list[str] = [
     "ReLU",
     "Sequential",
     "Sigmoid",
+    "Softmax",
     "Tanh",
     "_Loss",
 ]
@@ -582,6 +583,45 @@ class Sigmoid(Module):
             the input tensor.
         """
         return slowtorch.nn.functional.sigmoid(input)
+
+
+@set_module("slowtorch.nn.modules.activation")
+class Softmax(Module):
+    """Represents a Softmax activation layer.
+
+    The Softmax activation function applies an element-wise
+    transformation to the input tensor, defined as::
+
+        softmax(x) = exp(x) / exp(x).sum()
+
+    Sigmoid squashes all the values between the range of 0 to 1, along
+    the provided dimension and sum to 1. This operation is
+    differentiable, and gradients are propagated.
+    """
+
+    def __init__(self, dim: None | int = None) -> None:
+        """Initialise the `Softmax` module."""
+        super().__init__()
+        self.dim = dim
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Softmax` object."""
+        return f"{type(self).__name__}(dim={self.dim})"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the Softmax activation layer.
+
+        The forward pass applies the Softmax function to the input
+        tensor, squashing out all the values between the range of
+        0 to 1, along the provided dimension and sum to 1.
+
+        :param input: The input tensor to be transformed, of arbitrary
+            shape.
+        :return: A new tensor where each element is the result of the
+            Softmax operation applied to the corresponding element of
+            the input tensor.
+        """
+        return slowtorch.nn.functional.softmax(input, self.dim)
 
 
 @set_module("slowtorch.nn.modules.loss")
