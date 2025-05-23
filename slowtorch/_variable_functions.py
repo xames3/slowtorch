@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Monday, May 19 2025
+Last updated on: Friday, May 23 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -526,6 +526,86 @@ def full_like(
         device=device,
         requires_grad=requires_grad,
     )
+
+
+@function_dispatch
+def tril(
+    input: Tensor,
+    diagonal: int = 0,
+) -> Tensor:
+    """Create a lower triangular matrix (2-D tensor) with elements of
+    the input below and on the main diagonal, and zeros elsewhere.
+
+    :param input: The reference tensor whose size and optionally type
+        are used to create the new tensor.
+    :param diagonal: Diagonal offset, defaults to `0`. Possible diagonal
+        offsets::
+            - `0` for main diagonal
+            - `>0` above the main diagonal
+            - `<0` below the main diagonal
+    :return: A 2-D tensor of shape `(N, M)` where the elements below and
+        on the main diagonal are 1, and the elements above the diagonal
+        are 0.
+    :return: Tensor filled with elements of the input below and on the
+        main diagonal, and zeros elsewhere.
+    :raises RuntimeError: If input shape is not 2-D.
+    """
+    if len(input.shape) != 2:
+        raise RuntimeError("tril: input tensor must have 2 dimensions")
+    m, n = input.shape
+    new_tensor = empty(
+        (m, n),
+        dtype=input.dtype,
+        device=input.device,
+        requires_grad=input.requires_grad,
+    )
+    for idx in range(m):
+        for jdx in range(n):
+            if jdx - idx <= diagonal:
+                new_tensor[idx, jdx] = input[idx, jdx]
+            else:
+                new_tensor[idx, jdx] = 0
+    return new_tensor
+
+
+@function_dispatch
+def triu(
+    input: Tensor,
+    diagonal: int = 0,
+) -> Tensor:
+    """Create a upper triangular matrix (2-D tensor) with elements of
+    the input above and on the main diagonal, and zeros elsewhere.
+
+    :param input: The reference tensor whose size and optionally type
+        are used to create the new tensor.
+    :param diagonal: Diagonal offset, defaults to `0`. Possible diagonal
+        offsets::
+            - `0` for main diagonal
+            - `>0` above the main diagonal
+            - `<0` below the main diagonal
+    :return: A 2-D tensor of shape `(N, M)` where the elements above and
+        on the main diagonal are 1, and the elements above the diagonal
+        are 0.
+    :return: Tensor filled with elements of the input above and on the
+        main diagonal, and zeros elsewhere.
+    :raises RuntimeError: If input shape is not 2-D.
+    """
+    if len(input.shape) != 2:
+        raise RuntimeError("triu: input tensor must have 2 dimensions")
+    m, n = input.shape
+    new_tensor = empty(
+        (m, n),
+        dtype=input.dtype,
+        device=input.device,
+        requires_grad=input.requires_grad,
+    )
+    for idx in range(m):
+        for jdx in range(n):
+            if jdx - idx < diagonal:
+                new_tensor[idx, jdx] = 0
+            else:
+                new_tensor[idx, jdx] = input[idx, jdx]
+    return new_tensor
 
 
 @function_dispatch
