@@ -1928,6 +1928,17 @@ class Tensor:
         """
         return slowtorch.nn.functional.exp(self)
 
+    def abs(self) -> Tensor:
+        """Perform element-wise absolute value conversion of the tensor.
+
+        This method performs absolute value conversion. The resulting
+        tensor is of the same shape and dtype as the input.
+
+        :return: A new tensor containing the result of the element-wise
+            absolute value conversion.
+        """
+        return slowtorch.nn.functional.abs(self)
+
     def sqrt(self) -> Tensor:
         """Perform element-wise square root of a tensor.
 
