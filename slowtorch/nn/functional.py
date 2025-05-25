@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Friday, May 23 2025
+Last updated on: Saturday, May 24 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -534,6 +534,47 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
         input.grad += (other * input ** (other - 1)) * new_tensor.grad
 
     new_tensor.grad_fn = Node(PowBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
+def abs(input: Tensor) -> Tensor:
+    """Return a new tensor with the absolute value of the elements of
+    input.
+
+    This method creates a new `Tensor` instance with the same shape and
+    absolute values of the original tensor's elements.
+
+    :param input: Input tensor.
+    :return: A new tensor with the absolute values of the data and
+        shape.
+    """
+    shape, requires_grad = input.shape, input.requires_grad
+    new_tensor = Tensor(shape, slowtorch.float32, requires_grad=requires_grad)
+    data: list[Number] = [builtins.abs(x) for x in input._flat]
+    new_tensor[:] = data
+
+    def AbsBackward0() -> None:
+        """Backpropagation implementation for absolute value.
+
+        Computes gradient for `input` and propagate it.
+        """
+        if not hasattr(input, "grad") or input.grad is None:
+            input.grad = Tensor(input.shape, slowtorch.float32)
+        data: list[Number] = []
+        for x in input._flat:
+            if x > 0:
+                data.append(1.0)
+            elif x < 0:
+                data.append(-1.0)
+            else:
+                data.append(0.0)
+        sign = Tensor(input.shape, slowtorch.float32)
+        sign[:] = data
+        input.grad += new_tensor.grad * sign
+
+    new_tensor.grad_fn = Node(AbsBackward0)
     new_tensor.grad_fn.inputs = (input,)
     return new_tensor
 
@@ -1598,13 +1639,13 @@ def mse_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """
     loss = (input - target) ** 2
     if reduction == "mean":
-        new_tensor = loss.sum() * (1.0 / loss.nelement())
+        new_tensor = loss.sum() / loss.nelement()
     elif reduction == "sum":
         new_tensor = loss.sum()
     elif reduction == "none":
         new_tensor = loss
 
-    def MSELossBackward0() -> None:
+    def MseLossBackward0() -> None:
         """Backpropagation implementation for MSE loss.
 
         Computes gradients for the `input` and `target` tensors and
@@ -1616,6 +1657,6 @@ def mse_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
         input.grad += grad * (input - target)
         target.grad -= grad * (input - target)
 
-    new_tensor.grad_fn = Node(MSELossBackward0)
+    new_tensor.grad_fn = Node(MseLossBackward0)
     new_tensor.grad_fn.inputs = (input, target)
     return new_tensor
