@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Friday, May 23 2025
+Last updated on: Saturday, May 24 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -60,9 +60,11 @@ __all__: list[str] = [
     "ELU",
     "Flatten",
     "Identity",
+    "L1Loss",
     "Linear",
     "MSELoss",
     "Module",
+    "NLLLoss",
     "Parameter",
     "ReLU",
     "Sequential",
@@ -710,3 +712,121 @@ class MSELoss(_Loss):
                 f"with target shape {target.shape}"
             )
         return slowtorch.nn.functional.mse_loss(input, target, self.reduction)
+
+
+@set_module("slowtorch.nn.modules.loss")
+class L1Loss(_Loss):
+    """Mean Absolute Error (MAE) Loss module.
+
+    This class calculates the Mean Absolute Error loss between the
+    predicted tensor (`input`) and the target tensor (`target`). It
+    supports different reduction strategies such as `mean`, `sum`, or
+    `none`.
+
+    :param size_average: If `True`, set reduction strategy to `mean`,
+        defaults to `None`.
+    :param reduce: If `True`, set reduction strategy to `sum`, defaults
+        to `None`.
+    :param reduction: Specify the reduction method to apply to the loss.
+        Acceptable values are `mean`, `sum`, and `none`, defaults to
+        `mean`.
+    :raises ValueError: If conflicting parameters are provided or if the
+        `reduction` value is invalid.
+    """
+
+    reduction: str
+
+    def __init__(
+        self,
+        size_average: bool = None,
+        reduce: bool = None,
+        reduction: str = "mean",
+    ) -> None:
+        """Initialise `L1Loss` instance with a reduction strategy."""
+        super().__init__(size_average, reduce, reduction)
+
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
+        """Compute the MAE loss between `input` and `target` tensors.
+
+        This method calculates the absolute differences between the
+        input and target tensors, and applies the reduction strategy
+        specified during initialisation.
+
+        :param input: The predicted tensor.
+        :param target: The target tensor.
+        :return: A tensor representing the computed MAE loss, with
+            reduction applied as per the configured strategy.
+        :raises ValueError: If `input` and `target` tensors have
+            mismatched shapes.
+        """
+        if input.shape != target.shape:
+            raise ValueError(
+                f"Shape of input tensor {input.shape} does not match "
+                f"with target shape {target.shape}"
+            )
+        return slowtorch.nn.functional.l1_loss(input, target, self.reduction)
+
+
+@set_module("slowtorch.nn.modules.loss")
+class NLLLoss(_Loss):
+    """Negative Log Likelihood (NLL) Loss module.
+
+    This class calculates the Mean Absolute Error loss between the
+    predicted tensor (`input`) and the target tensor (`target`). It
+    supports different reduction strategies such as `mean`, `sum`, or
+    `none`.
+
+    :param size_average: If `True`, set reduction strategy to `mean`,
+        defaults to `None`.
+    :param reduce: If `True`, set reduction strategy to `sum`, defaults
+        to `None`.
+    :param reduction: Specify the reduction method to apply to the loss.
+        Acceptable values are `mean`, `sum`, and `none`, defaults to
+        `mean`.
+    :raises ValueError: If conflicting parameters are provided or if the
+        `reduction` value is invalid.
+    """
+
+    reduction: str
+
+    def __init__(
+        self,
+        weight: None | Tensor = None,
+        size_average: bool = None,
+        reduce: bool = None,
+        reduction: str = "mean",
+    ) -> None:
+        """Initialise `NLLLoss` instance with a reduction strategy."""
+        super().__init__(size_average, reduce, reduction)
+        if weight:
+            raise RuntimeError("weight is currently not supported")
+
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
+        """Compute the NLL loss between `input` and `target` tensors.
+
+        This method calculates the negative log likelihood between the
+        input and target tensors, and applies the reduction strategy
+        specified during initialisation.
+
+        :param input: The predicted tensor.
+        :param target: The target tensor.
+        :return: A tensor representing the computed NLL loss, with
+            reduction applied as per the configured strategy.
+        """
+        if target.dtype != slowtorch.int64:
+            dtype = target.dtype.typename[:-6]
+            raise RuntimeError(f"expected scalar type Long but found {dtype}")
+        batch, _ = input.shape
+        try:
+            N, _ = target.shape
+        except ValueError:
+            if not all(target >= 0):  # type: ignore[arg-type]
+                raise IndexError("Target < 0 is out of bounds")
+            return slowtorch.nn.functional.nll_loss(
+                input, target, self.reduction
+            )
+        else:
+            raise ValueError(
+                f"Expected input batch_size ({batch}) to match target "
+                f"batch_size ({N})"
+            )
