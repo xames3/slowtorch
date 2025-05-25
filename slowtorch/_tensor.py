@@ -819,6 +819,17 @@ class Tensor:
         """
         return slowtorch.nn.functional.neg(self)
 
+    def __abs__(self) -> Tensor:
+        """Perform element-wise absolute value conversion of the tensor.
+
+        This method performs absolute value conversion. The resulting
+        tensor is of the same shape and dtype as the input.
+
+        :return: A new tensor containing the result of the element-wise
+            absolute value conversion.
+        """
+        return slowtorch.nn.functional.abs(self)
+
     def __lt__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise less-than operation of the tensor with a
         scalar or another tensor.
@@ -1571,6 +1582,7 @@ class Tensor:
     true_divide = divide = div
     matmul = __matmul__
     pow = __pow__
+    abs = __abs__
 
     def backward(
         self,
@@ -1886,17 +1898,6 @@ class Tensor:
             exponentiation.
         """
         return slowtorch.nn.functional.exp(self)
-
-    def abs(self) -> Tensor:
-        """Perform element-wise absolute value conversion of the tensor.
-
-        This method performs absolute value conversion. The resulting
-        tensor is of the same shape and dtype as the input.
-
-        :return: A new tensor containing the result of the element-wise
-            absolute value conversion.
-        """
-        return slowtorch.nn.functional.abs(self)
 
     def sqrt(self) -> Tensor:
         """Perform element-wise square root of a tensor.
