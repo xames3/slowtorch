@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, May 23 2025
+Last updated on: Saturday, May 24 2025
 
 Tensor object.
 
@@ -339,13 +339,15 @@ class Tensor:
         """Return a string representation of `Tensor` object."""
         precision = getattr(self._print_opts, "precision", 4)
 
-        def format_element(value: t.Any) -> str:
+        def fmt_element(value: t.Any) -> str:
             if isinstance(value, float):
                 out = f"{value:.{precision}f}".rstrip("0").rstrip(".")
                 return out + "." if "." not in out else out
             return str(value)
 
-        whitespace = max(len(format_element(value)) for value in self.storage)
+        whitespace = 0
+        if self.storage:
+            whitespace = max(len(fmt_element(value)) for value in self.storage)
         only = len(self.storage) == 1
         formatted = self.format_repr(
             "", 0, self._offset, 7, whitespace, only, precision
@@ -382,16 +384,6 @@ class Tensor:
         offset: int = self._offset
         shape: list[int] = []
         strides: list[int] = []
-        if not isinstance(key, tuple):
-            key = (key,)
-        if Ellipsis in key:
-            ellipsis = key.index(Ellipsis)
-            pre = key[:ellipsis]
-            post = key[ellipsis + 1 :]
-            count = len(self.shape) - len(pre) - len(post)
-            if count < 0:
-                raise IndexError("Too many indices for tensor")
-            key = pre + (slice(None),) * count + post
         for dim in key:
             if axis >= len(self._shape) and dim is not None:
                 raise IndexError("Too many indices for tensor")
@@ -407,7 +399,7 @@ class Tensor:
                 axis += 1
             elif isinstance(dim, slice) and axissize is not None:
                 start, stop, step = dim.indices(axissize)
-                shape.append(-(-(stop - start) // step))
+                shape.append(-(-(stop - start) // step) if step != 0 else 0)
                 strides.append(step * self._strides[axis])
                 offset += start * self._strides[axis] // self.itemsize
                 axis += 1
@@ -474,8 +466,13 @@ class Tensor:
 
     def __getitem__(
         self,
-        key: builtins.int | slice | tuple[builtins.int | slice | None, ...],
-    ) -> t.Any | "Tensor":
+        key: (
+            builtins.int
+            | slice
+            | Tensor
+            | tuple[builtins.int | slice | None | Tensor | t.Ellipsis, ...]
+        ),
+    ) -> t.Any | Tensor:
         """Retrieve a scalar or a sub-tensor based on the specified index
         or slice.
 
@@ -490,6 +487,23 @@ class Tensor:
         :raises IndexError: For invalid indexing.
         :raises TypeError: For unsupported key types.
         """
+        if not isinstance(key, tuple):
+            key = (key,)
+        if Ellipsis in key:
+            for idx in range(key.count(Ellipsis)):
+                pre = key[:idx]
+                post = key[idx + 1 :]
+                count = len(self.shape) - len(pre) - len(post)
+                if count < 0:
+                    raise IndexError("Too many indices for tensor")
+                key = pre + (slice(None),) * count + post
+        if len(key) < len(self.shape):
+            key = key + (slice(None),) * (len(self.shape) - len(key))
+        if any(isinstance(kdx, builtins.bool) for kdx in key):
+            key = tuple(
+                int(kdx) if isinstance(kdx, builtins.bool) else kdx
+                for kdx in key
+            )
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
             return self.storage[offset]
@@ -529,6 +543,8 @@ class Tensor:
             tuple, but must match the shape and size of the subarray
             being updated.
         """
+        if not isinstance(key, tuple):
+            key = (key,)
         offset, shape, strides = self.calculate_offset_shape_strides(key)
         if not shape:
             self.storage[offset] = safe_round(
@@ -1293,7 +1309,7 @@ class Tensor:
     def item(self) -> t.Any:
         """Return standard scalar Python object for tensor object."""
         if self.nelement() == 1:
-            return self.view(-1)[0]
+            return self.view(-1).storage[0]
         else:
             raise RuntimeError(
                 f"Tensor with {self.nelement()} elements cannot be"
