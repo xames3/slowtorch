@@ -75,6 +75,7 @@ import slowtorch
 from slowtorch import function_dispatch
 from slowtorch._types import FILE_LIKE
 from slowtorch._types import ArrayLike
+from slowtorch._types import IndexLike
 from slowtorch._types import Number
 from slowtorch._utils import Device
 from slowtorch._utils import Dtype
@@ -366,7 +367,7 @@ class Tensor:
         return f"tensor({formatted}{extra})"
 
     def calculate_offset_shape_strides(
-        self, key: int | slice | tuple[None | int | slice, ...] | t.Ellipsis
+        self, key: IndexLike
     ) -> tuple[int, tuple[int, ...], tuple[int, ...]]:
         """Calculate offset, shape, and strides for an indexing
         operation.
@@ -464,15 +465,7 @@ class Tensor:
             raise IndexError("Tensor has no dimensions")
         return self.shape[0]
 
-    def __getitem__(
-        self,
-        key: (
-            builtins.int
-            | slice
-            | Tensor
-            | tuple[builtins.int | slice | None | Tensor | t.Ellipsis, ...]
-        ),
-    ) -> t.Any | Tensor:
+    def __getitem__(self, indices: IndexLike) -> t.Any | Tensor:
         """Retrieve a scalar or a sub-tensor based on the specified index
         or slice.
 
@@ -482,29 +475,30 @@ class Tensor:
         scalar values, a single element is returned. For subarrays, a
         new tensor object is created and returned.
 
-        :param key: Index or slice object, or tuple of them.
+        :param indices: Index or slice object, or tuple of them.
         :return: Scalar or sub-array as per the indexing operation.
         :raises IndexError: For invalid indexing.
-        :raises TypeError: For unsupported key types.
+        :raises TypeError: For unsupported indices types.
         """
-        if not isinstance(key, tuple):
-            key = (key,)
-        if Ellipsis in key:
-            for idx in range(key.count(Ellipsis)):
-                pre = key[:idx]
-                post = key[idx + 1 :]
-                count = len(self.shape) - len(pre) - len(post)
-                if count < 0:
-                    raise IndexError("Too many indices for tensor")
-                key = pre + (slice(None),) * count + post
-        if len(key) < len(self.shape):
-            key = key + (slice(None),) * (len(self.shape) - len(key))
-        if any(isinstance(kdx, builtins.bool) for kdx in key):
-            key = tuple(
-                int(kdx) if isinstance(kdx, builtins.bool) else kdx
-                for kdx in key
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        for idx in range(indices.count(Ellipsis)):
+            pre = indices[:idx]
+            post = indices[idx + 1 :]
+            count = len(self.shape) - len(pre) - len(post)
+            if count < 0:
+                raise IndexError("Too many indices for tensor")
+            indices = pre + (slice(None),) * count + post
+        if len(indices) < len(self.shape):
+            indices = indices + (slice(None),) * (
+                len(self.shape) - len(indices)
             )
-        offset, shape, strides = self.calculate_offset_shape_strides(key)
+        if any(isinstance(kdx, builtins.bool) for kdx in indices):
+            indices = tuple(
+                int(kdx) if isinstance(kdx, builtins.bool) else kdx
+                for kdx in indices
+            )
+        offset, shape, strides = self.calculate_offset_shape_strides(indices)
         if not shape:
             return self.storage[offset]
         return Tensor(
@@ -518,9 +512,7 @@ class Tensor:
         )
 
     def __setitem__(
-        self,
-        key: builtins.int | slice | tuple[None | builtins.int | slice, ...],
-        value: builtins.float | builtins.int | t.Sequence[Number] | Tensor,
+        self, indices: IndexLike, value: Number | t.Sequence[Number] | Tensor
     ) -> None:
         """Assign a value to a specific element or subarray within the
         tensor.
@@ -530,8 +522,8 @@ class Tensor:
         sequence (e.g., list or tuple), or another tensor. If assigning
         to a subarray, the value must match the shape of the subarray.
 
-        :param key: Index or slice to identify the element or subarray
-            to update.
+        :param indices: Index or slice to identify the element or
+            subarray to update.
         :param value: The value to assign to the selected element or
             subarray.
         :raises ValueError: If the number of element in the value does
@@ -543,9 +535,9 @@ class Tensor:
             tuple, but must match the shape and size of the subarray
             being updated.
         """
-        if not isinstance(key, tuple):
-            key = (key,)
-        offset, shape, strides = self.calculate_offset_shape_strides(key)
+        if not isinstance(indices, tuple):
+            indices = (indices,)
+        offset, shape, strides = self.calculate_offset_shape_strides(indices)
         if not shape:
             self.storage[offset] = safe_round(
                 value, self._print_opts.precision
@@ -603,7 +595,7 @@ class Tensor:
                     sub_tensors.append(sub_tensor[dim])
         assert idx == len(array_like)
 
-    def broadcast_to(self, size: Size | tuple[int, ...]) -> Tensor:
+    def broadcast_to(self, size: Size) -> Tensor:
         """Broadcast the tensor to the target shape."""
         if self.shape == size:
             return self
@@ -1232,7 +1224,7 @@ class Tensor:
 
     reshape = view
 
-    def tolist(self) -> list[t.Any]:
+    def tolist(self) -> list[Number]:
         """Convert the tensor to a nested Python list.
 
         This method recursively iterates over the dimensions of the
@@ -1577,41 +1569,8 @@ class Tensor:
         return self.__div__(other)
 
     true_divide = divide = div
-
-    def matmul(self, other: Tensor) -> Tensor:
-        """Perform matrix multiplication of the tensor with another
-        tensor, scaled by alpha.
-
-        This method supports matrix multiplication with other tensors of
-        the same shape. The resulting tensor is of the same shape and
-        dtype as the input.
-
-        :param other: The operand for matrix multiplication.
-        :return: A new tensor containing the result of the element-wise
-            matrix multiplication.
-        :raises TypeError: If `other` is not a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
-        """
-        return self.__matmul__(other)
-
-    def pow(self, exponent: Number | Tensor) -> Tensor:
-        """Perform element-wise exponentiation of the tensor with a
-        scalar or another tensor.
-
-        This method supports exponentiation with scalars (float) and
-        other tensors of the same shape. The resulting tensor is of the
-        same shape and dtype as the input.
-
-        :param exponent: The operand for exponentiation. Can be a scalar
-            or a tensor of the same shape.
-        :return: A new tensor containing the result of the element-wise
-            exponentiation.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
-        """
-        return self.__pow__(exponent)
+    matmul = __matmul__
+    pow = __pow__
 
     def backward(
         self,
