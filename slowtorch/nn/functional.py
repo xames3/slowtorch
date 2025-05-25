@@ -1570,6 +1570,43 @@ def softmax(
 
 
 @function_dispatch
+def log_softmax(
+    input: Tensor,
+    dim: None | int = None,
+    dtype: None | Dtype = None,
+) -> Tensor:
+    """Apply the Softmax function followed by Logarithm.
+
+    This is mathematically equivalent to applying softmax function
+    followed by logarith. This operation is differentiable, and
+    gradients are propagated.
+
+    :param input: Input tensor to which Log + Softmax is to be applied.
+    :param dim: A dimension along which softmax will be computed,
+        defaults to `None`.
+    :return: Output tensor after applying the Log softmax function, with
+        gradients linked for backpropagation.
+    """
+    x = softmax(input, dim, dtype)
+    new_tensor = log(x)
+
+    def LogSoftmaxBackward0() -> None:
+        """Backpropagation implementation for Logsoftmax.
+
+        Computes gradients for `input` tensor and propagates them.
+        """
+        grad = new_tensor.grad - x * new_tensor.grad.sum(dim=dim, keepdim=True)
+        if input.grad is None:
+            input.grad = grad
+        else:
+            input.grad += grad
+
+    new_tensor.grad_fn = Node(LogSoftmaxBackward0)
+    new_tensor.grad_fn.inputs = (input,)
+    return new_tensor
+
+
+@function_dispatch
 def linear(
     input: Tensor, weight: Tensor, bias: None | Tensor = None
 ) -> Tensor:

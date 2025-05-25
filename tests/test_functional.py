@@ -780,3 +780,40 @@ def test_softmax(tensors, dim):
             rtol=1e-3,
             atol=1e-3,
         )
+
+
+@pytest.mark.parametrize(
+    "tensors",
+    [
+        (2,),
+        (2, 3),
+        (4, 2, 3),
+        (1, 2, 3, 4),
+    ],
+    indirect=True,
+)
+@pytest.mark.parametrize("dim", range(-4, 4))
+def test_log_softmax(tensors, dim):
+    torch_tensor, slowtorch_tensor = tensors
+    ndim = torch_tensor.ndim
+    if dim in range(-ndim, ndim):
+        primary = torch.log_softmax(torch_tensor, dim=dim)
+        against = slowtorch.log_softmax(slowtorch_tensor, dim=dim)
+        assert_close(
+            primary.detach(),
+            to_torch_tensor(against),
+            rtol=1e-3,
+            atol=1e-3,
+        )
+        if torch_tensor.grad is not None:
+            torch_tensor.grad.zero_()
+        if slowtorch_tensor.grad is not None:
+            slowtorch_tensor.grad = 0.0
+        primary.sum().backward()
+        against.sum().backward()
+        assert_close(
+            torch_tensor.grad,
+            to_torch_tensor(slowtorch_tensor.grad),
+            rtol=1e-3,
+            atol=1e-3,
+        )
