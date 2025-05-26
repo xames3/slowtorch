@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Saturday, May 24 2025
+Last updated on: Sunday, May 25 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -1801,3 +1801,29 @@ def nll_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     new_tensor.grad_fn = Node(NllLossBackward0)
     new_tensor.grad_fn.inputs = (input, target)
     return new_tensor
+
+
+@function_dispatch
+def cross_entropy(
+    input: Tensor, target: Tensor, reduction: str = "mean"
+) -> Tensor:
+    """Compute the Cross Entropy loss between input and target tensor.
+
+    This loss is useful to train a classification problem with `C`
+    classes. The input is expected to contain log-probabilities
+    (typically output of `log_softmax`), and the target contains the
+    class indices. It supports autograd for backpropagation.
+
+    :param input: The input tensor of shape (N, C) where C = number of
+        classes.
+    :param target: The target of shape (N,) with class indices in
+        [0, C-1].
+    :param reduction: The reduction function to apply to the computed
+        loss. Options are::
+            - `mean`: Return the average of the absolute differences.
+            - `sum`: Return the sum of the absolute differences.
+            - `none`: Return the absolute differences without reduction.
+        Defaults to `mean`.
+    :return: A scalar tensor representing the Cross Entropy loss.
+    """
+    return nll_loss(log_softmax(input, dim=1), target, reduction)
