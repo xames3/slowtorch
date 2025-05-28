@@ -1658,7 +1658,7 @@ class Tensor:
                 prefix = ""
             dtype = f", dtype={input.dtype}" if show_dtype else ""
             shape = getattr(input, "_shape", "?")
-            label = f"Tensor#{get_id(input)}(shape={shape}{dtype})"
+            label = f"Tensor.{get_id(input)}(shape={shape}{dtype})"
             if id(input) in shown:
                 print(prefix + label + " [already seen]")
                 return

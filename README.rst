@@ -1,6 +1,6 @@
 .. Author: Akshay Mestry <xa@mes3.dev>
 .. Created on: Thursday, October 10 2024
-.. Last updated on: Tuesday, May 27 2025
+.. Last updated on: Wednesday, May 28 2025
 
 ===============================================================================
 SlowTorch
@@ -277,13 +277,24 @@ Autograd Mechanics
       >>> c.grad
       tensor([[1.5406, 0.8822, 0.7036, 1.1408], 
               [0.4084,  0.541, 0.5275, 1.1349]], grad_fn=<AddBackward0>)
+      >>> 
+      >>> d.render(show_dtype=True)  # custom method for SlowTorch
+      Tensor.5(shape=(2, 4), dtype=slowtorch.float32)
+           MulBackward0
+           ├──► Tensor.3(shape=(2, 4), dtype=slowtorch.float32)
+           │    AddBackward0
+           │    ├──► Tensor.1(shape=(2, 4), dtype=slowtorch.float32)
+           │    └──► Tensor.2(shape=(2, 4), dtype=slowtorch.float32)
+           └──► Tensor.4(shape=(2, 4), dtype=slowtorch.float32)
 
 - **Specialised Backward Functions.** Like PyTorch, SlowTorch also implements
   some specialised `backward <https://pytorch.org/docs/stable/generated/torch.
   autograd.backward.html#torch.autograd.backward>`_ functions for
   backpropagation. These functions are mainly for representing the derivative
-  or gradient calculations of the said functions. SlowTorch supports a few
-  backward functions when ``requires_grad`` is ``True``:
+  or gradient calculations of the said functions.
+  
+  **Note.** SlowTorch supports a few backward functions when ``requires_grad``
+  is ``True``:
 
   - **AddBackward0.** For addition operations.
 
@@ -418,7 +429,7 @@ Autograd Mechanics
       tensor([ 0.3739, -1.9905,  1.0801], grad_fn=<ViewBackward0>)
 
   - **SumBackward0.** For calculating sum, across dimensions. Also supports
-    `keepdim` option.
+    ``keepdim`` option.
 
   .. code-block:: python
 
@@ -445,7 +456,7 @@ Autograd Mechanics
               [0.9042, 0.0037, 0.0996]], grad_fn=<SumBackward0>)
 
   - **MaxBackward0.** For calculating maximum, across dimensions. Also supports
-    `keepdim` option.
+    ``keepdim`` option.
 
   .. code-block:: python
 
@@ -469,7 +480,7 @@ Autograd Mechanics
               [ 0.727, 0.9787]], grad_fn=<MaxBackward0>)
 
   - **MinBackward0.** For calculating minimum, across dimensions. Also supports
-    `keepdim` option.
+    ``keepdim`` option.
 
   .. code-block:: python
 
@@ -485,7 +496,7 @@ Autograd Mechanics
       tensor([-0.9405, -0.1255], grad_fn=<MinBackward0>)
 
   - **MeanBackward0.** For calculating mean, across dimensions. Also supports
-    `keepdim` option.
+    ``keepdim`` option.
 
   .. code-block:: python
 
@@ -522,7 +533,7 @@ Autograd Mechanics
               [ 0.0943,  0.0541, -0.6448,  1.3448]], grad_fn=<MeanBackward0>)
 
   - **StdBackward0.** For calculating standard deviation, across dimensions.
-    Also supports `keepdim` option.
+    Also supports ``keepdim`` option.
 
   .. code-block:: python
 
