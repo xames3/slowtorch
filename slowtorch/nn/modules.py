@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Sunday, May 25 2025
+Last updated on: Wednesday, May 28 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -599,6 +599,9 @@ class Softmax(Module):
     Sigmoid squashes all the values between the range of 0 to 1, along
     the provided dimension and sum to 1. This operation is
     differentiable, and gradients are propagated.
+
+    :param dim: A dimension along which softmax will be computed,
+        defaults to `None`.
     """
 
     def __init__(self, dim: None | int = None) -> None:
@@ -624,6 +627,44 @@ class Softmax(Module):
             the input tensor.
         """
         return slowtorch.nn.functional.softmax(input, self.dim)
+
+
+@set_module("slowtorch.nn.modules.activation")
+class LogSoftmax(Module):
+    """Represents a LogSoftmax activation layer.
+
+    This is mathematically equivalent to applying softmax function
+    followed by logarith. This operation is differentiable, and
+    gradients are propagated.
+
+    :param dim: A dimension along which log softmax will be computed,
+        defaults to `None`.
+    """
+
+    def __init__(self, dim: None | int = None) -> None:
+        """Initialise the `LogSoftmax` module."""
+        super().__init__()
+        self.dim = dim
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `LogSoftmax` object."""
+        return f"{type(self).__name__}(dim={self.dim})"
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the LogSoftmax activation layer.
+
+        The forward pass applies the Softmax function to the input
+        tensor, squashing out all the values between the range of
+        0 to 1, along the provided dimension and sum to 1. This
+        operation is followed by a logarithm.
+
+        :param input: The input tensor to be transformed, of arbitrary
+            shape.
+        :return: A new tensor where each element is the result of the
+            LogSoftmax operation applied to the corresponding element of
+            the input tensor.
+        """
+        return slowtorch.nn.functional.log_softmax(input, self.dim)
 
 
 @set_module("slowtorch.nn.modules.loss")
