@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Tuesday, May 27 2025
+Last updated on: Wednesday, May 28 2025
 
 Tensor object.
 
@@ -1319,18 +1319,11 @@ class Tensor:
                 " converted to scalar"
             )
 
-    def flatten(self) -> Tensor:
+    def ravel(self) -> Tensor:
         """Return a copy of the tensor collapsed into one dimension."""
-        new_tensor = Tensor(
-            (self.nelement(),),
-            self.dtype,
-            self.device,
-            self.requires_grad,
-        )
-        new_tensor[:] = self
-        return new_tensor
+        return slowtorch.nn.functional.ravel(self)
 
-    ravel = flatten
+    flatten = ravel
 
     def view_(
         self,
@@ -1397,50 +1390,6 @@ class Tensor:
         )
         new_tensor[:] = tuple(py_sorted(unique) if sorted else unique)
         return new_tensor
-
-    def lt(self, other: Number | Tensor) -> Tensor:
-        """Compute input < other element-wise.
-
-        :param other: Tensor or Scalar to compare.
-        :return: A boolean tensor that is True where input is less than
-            other and False elsewhere.
-        """
-        return self.__lt__(other)
-
-    less = lt
-
-    def gt(self, other: Number | Tensor) -> Tensor:
-        """Compute input > other element-wise.
-
-        :param other: Tensor or Scalar to compare.
-        :return: A boolean tensor that is True where input is greater
-            than other and False elsewhere.
-        """
-        return self.__gt__(other)
-
-    greater = gt
-
-    def le(self, other: Number | Tensor) -> Tensor:
-        """Compute input <= other element-wise.
-
-        :param other: Tensor or Scalar to compare.
-        :return: A boolean tensor that is True where input is less than
-            or equal to other and False elsewhere.
-        """
-        return self.__le__(other)
-
-    less_equal = le
-
-    def ge(self, other: Number | Tensor) -> Tensor:
-        """Compute input >= other element-wise.
-
-        :param other: Tensor or Scalar to compare.
-        :return: A boolean tensor that is True where input is greater
-            than or equal to other and False elsewhere.
-        """
-        return self.__ge__(other)
-
-    greater_equal = ge
 
     def neg(self) -> Tensor:
         """Compute negative of the elements.
@@ -1577,12 +1526,16 @@ class Tensor:
         """
         if rounding_mode is not None:
             raise RuntimeError("Rounding mode is not supported")
-        return self.__div__(other)
+        return self.__truediv__(other)
 
     true_divide = divide = div
     matmul = __matmul__
     pow = __pow__
     abs = __abs__
+    less = lt = __lt__
+    greater = gt = __gt__
+    less_equal = le = __le__
+    greater_equal = ge = __ge__
 
     def backward(
         self,
@@ -1992,6 +1945,24 @@ class Tensor:
             gradients linked for backpropagation.
         """
         return slowtorch.nn.functional.softmax(self, dim=dim, dtype=dtype)
+
+    def log_softmax(
+        self,
+        dim: None | builtins.int = None,
+        dtype: None | Dtype = None,
+    ) -> Tensor:
+        """Apply the Softmax function followed by Logarithm.
+
+        This is mathematically equivalent to applying softmax function
+        followed by logarith. This operation is differentiable, and
+        gradients are propagated.
+
+        :param dim: A dimension along which softmax will be computed,
+            defaults to `None`.
+        :return: Output tensor after applying the Log softmax function,
+            with gradients linked for backpropagation.
+        """
+        return slowtorch.nn.functional.log_softmax(self, dim=dim, dtype=dtype)
 
 
 @set_module("slowtorch")

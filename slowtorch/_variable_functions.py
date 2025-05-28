@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Friday, May 23 2025
+Last updated on: Wednesday, May 28 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -266,8 +266,10 @@ def uniform_(
         U(a, b) = a <= x < b
 
     :param tensor: The tensor to initialize.
-    :param a: The lower bound of the uniform distribution (inclusive).
-    :param b: The upper bound of the uniform distribution (exclusive).
+    :param a: The lower bound of the uniform distribution (inclusive),
+        defaults to 0.0.
+    :param b: The upper bound of the uniform distribution (exclusive),
+        defaults to 1.0.
     :return: The modified tensor.
     :raises ValueError: If `a` >= `b`.
     """
@@ -483,9 +485,12 @@ def full(
         on the returned tensor, defaults to `False`.
     :return: An initialised tensor with the values set to `fill_value`.
     """
-    if not isinstance(size[0], Iterable):
-        raise TypeError(f"Expected a sequence of integers got {size!r}")
-    new_tensor = Tensor(size[0], dtype, device, requires_grad)
+    new_tensor = empty(
+        *size,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
+    )
     new_tensor.fill_(fill_value)
     return new_tensor
 
@@ -538,7 +543,7 @@ def tril(
 
     :param input: The reference tensor whose size and optionally type
         are used to create the new tensor.
-    :param diagonal: Diagonal offset, defaults to `0`. Possible diagonal
+    :param diagonal: Diagonal offset, defaults to 0. Possible diagonal
         offsets::
             - `0` for main diagonal
             - `>0` above the main diagonal
@@ -578,7 +583,7 @@ def triu(
 
     :param input: The reference tensor whose size and optionally type
         are used to create the new tensor.
-    :param diagonal: Diagonal offset, defaults to `0`. Possible diagonal
+    :param diagonal: Diagonal offset, defaults to 0. Possible diagonal
         offsets::
             - `0` for main diagonal
             - `>0` above the main diagonal

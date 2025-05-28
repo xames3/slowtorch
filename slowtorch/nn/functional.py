@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Tuesday, May 27 2025
+Last updated on: Wednesday, May 28 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -660,7 +660,10 @@ def ravel(input: Tensor) -> Tensor:
     :return: A new tensor with the same data, and type as the original
         tensor but in 1-D.
     """
-    new_tensor = input.ravel()
+    new_tensor = Tensor(
+        input.nelement(), input.dtype, input.device, input.requires_grad
+    )
+    new_tensor[:] = input
 
     def ViewBackward0() -> None:
         """Backpropagation implementation for cloning.
@@ -1835,8 +1838,8 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
 
     :param tensor: Tensor of arbitrary shape containing integer class
         indices.
-    :param num_classes: Total number of classes, defaults to `-1`.
-        If `-1`, inferred from tensor as `tensor.max() + 1`.
+    :param num_classes: Total number of classes, defaults to -1.
+        If -1, inferred from tensor as `tensor.max() + 1`.
     :return: One-hot encoded tensor.
     """
     flat = tensor.reshape(-1)
