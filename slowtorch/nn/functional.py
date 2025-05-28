@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Sunday, May 25 2025
+Last updated on: Tuesday, May 27 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -1827,3 +1827,22 @@ def cross_entropy(
     :return: A scalar tensor representing the Cross Entropy loss.
     """
     return nll_loss(log_softmax(input, dim=1), target, reduction)
+
+
+@function_dispatch
+def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
+    """Convert a tensor of class indices to a one-hot encoded tensor.
+
+    :param tensor: Tensor of arbitrary shape containing integer class
+        indices.
+    :param num_classes: Total number of classes, defaults to `-1`.
+        If `-1`, inferred from tensor as `tensor.max() + 1`.
+    :return: One-hot encoded tensor.
+    """
+    flat = tensor.reshape(-1)
+    if num_classes == -1:
+        num_classes = flat.max().item() + 1
+    new_tensor = slowtorch.zeros(len(flat), num_classes, dtype=slowtorch.int64)
+    for dim in range(len(new_tensor)):
+        new_tensor[dim][flat[dim]] = 1
+    return new_tensor.reshape(*tensor.shape, num_classes)

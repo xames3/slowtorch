@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Saturday, May 24 2025
+Last updated on: Tuesday, May 27 2025
 
 Tensor object.
 
@@ -1209,7 +1209,7 @@ class Tensor:
         else:
             raise ValueError("Tensors can only be viewed with the same dtype")
 
-    def view(self, *size: builtins.int) -> None | Tensor:
+    def view(self, *size: builtins.int) -> Tensor:
         """Return a new view of the tensor with the specified shape.
 
         This method attempts to reshape the tensor while keeping the
