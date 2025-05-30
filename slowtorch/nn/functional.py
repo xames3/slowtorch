@@ -4,7 +4,7 @@ SlowTorch Neural Network related Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Wednesday, January 15 2025
-Last updated on: Wednesday, May 28 2025
+Last updated on: Thursday, May 29 2025
 
 This module in `SlowTorch` offers a comprehensive suite of stateless
 functions that perform various tensor operations, mimicking the
@@ -37,10 +37,10 @@ the field of deep learning.
 from __future__ import annotations
 
 import builtins
-import itertools
 import math
 import statistics
 import typing as t
+from itertools import product as pdt
 
 import slowtorch
 from slowtorch import function_dispatch
@@ -70,8 +70,6 @@ def add(input: Tensor, other: Number | Tensor) -> Tensor:
     :return: A new tensor containing the result of the element-wise
         addition.
     :raises TypeError: If `other` is neither a scalar nor a tensor.
-    :raises ValueError: If `other` is a tensor but its shape
-        doesn't match `input.shape`.
     """
     if isinstance(other, Number):
         scalar = other
@@ -128,8 +126,6 @@ def sub(input: Tensor, other: Number | Tensor) -> Tensor:
     :return: A new tensor containing the result of the element-wise
         subtraction.
     :raises TypeError: If `other` is neither a scalar nor a tensor.
-    :raises ValueError: If `other` is a tensor but its shape
-        doesn't match `input.shape`.
     """
     if isinstance(other, Number):
         scalar = other
@@ -186,8 +182,6 @@ def mul(input: Tensor, other: Number | Tensor) -> Tensor:
     :return: A new tensor containing the result of the element-wise
         multiplication.
     :raises TypeError: If `other` is neither a scalar nor a tensor.
-    :raises ValueError: If `other` is a tensor but its shape
-        doesn't match `input.shape`.
     """
     if isinstance(other, Number):
         scalar = other
@@ -250,8 +244,6 @@ def div(
     :return: A new tensor containing the result of the element-wise
         division.
     :raises TypeError: If `other` is neither a scalar nor a tensor.
-    :raises ValueError: If `other` is a tensor but its shape
-        doesn't match `input.shape`.
     """
     data: list[Number] = []
     if isinstance(other, Number):
@@ -394,9 +386,7 @@ def matmul(input: Tensor, other: Tensor) -> Tensor:
         other = other.broadcast_to(shape[:-2] + other.shape[-2:])
         requires_grad = input.requires_grad or other.requires_grad
         new_tensor = Tensor(shape, dtype, requires_grad=requires_grad)
-        for batch in itertools.product(
-            *[range(dim) for dim in new_tensor.shape[:-2]]
-        ):
+        for batch in pdt(*[range(dim) for dim in new_tensor.shape[:-2]]):
             for idx in range(new_tensor.shape[-2]):
                 for jdx in range(new_tensor.shape[-1]):
                     new_tensor[(*batch, idx, jdx)] = builtins.sum(
@@ -439,8 +429,6 @@ def remainder(input: Tensor, other: Number | Tensor) -> Tensor:
     :return: A new tensor containing the result of the element-wise
         modulo operation.
     :raises TypeError: If `other` is neither a scalar nor a tensor.
-    :raises ValueError: If `other` is a tensor but its shape
-        doesn't match `input.shape`.
     """
     if isinstance(other, Number):
         scalar = other
@@ -497,8 +485,6 @@ def pow(input: Tensor, other: Number | Tensor) -> Tensor:
     :return: A new tensor containing the result of the element-wise
         exponentiation.
     :raises TypeError: If `other` is neither a scalar nor a tensor.
-    :raises ValueError: If `other` is a tensor but its shape
-        doesn't match `input.shape`.
     """
     if isinstance(other, Number):
         scalar = other
@@ -736,7 +722,7 @@ def sum(
     :param keepdim: A boolean indicating whether to retain the reduced
         dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the sum of the specified elements.
-    :raises ValueError: If the specified dimension is invalid.
+    :raises IndexError: If the specified dimension is invalid.
     """
     ndim = input.ndim
     if dim is not None:
@@ -816,7 +802,7 @@ def max(
         dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the maximum of the specified
         elements.
-    :raises ValueError: If the specified dimension is invalid.
+    :raises IndexError: If the specified dimension is invalid.
     """
     ndim = input.ndim
     if dim is not None:
@@ -868,15 +854,13 @@ def max(
         if not hasattr(input, "grad") or input.grad is None:
             input.grad = Tensor(input.shape, input.dtype)
         if dim is None:
-            for idx in itertools.product(*[range(dim) for dim in input.shape]):
+            for idx in pdt(*[range(dim) for dim in input.shape]):
                 if input[idx] == new_tensor.item():
                     input.grad[idx] += new_tensor.grad
                 else:
                     input.grad[idx] += 0.0
         else:
-            for idx in itertools.product(
-                *[range(dim) for dim in new_tensor.shape]
-            ):
+            for idx in pdt(*[range(dim) for dim in new_tensor.shape]):
                 indices = list(idx)
                 if keepdim:
                     indices[dim] = slice(None)
@@ -920,7 +904,7 @@ def min(
         dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the minimum of the specified
         elements.
-    :raises ValueError: If the specified dimension is invalid.
+    :raises IndexError: If the specified dimension is invalid.
     """
     ndim = input.ndim
     if dim is not None:
@@ -972,15 +956,13 @@ def min(
         if not hasattr(input, "grad") or input.grad is None:
             input.grad = Tensor(input.shape, input.dtype)
         if dim is None:
-            for idx in itertools.product(*[range(dim) for dim in input.shape]):
+            for idx in pdt(*[range(dim) for dim in input.shape]):
                 if input[idx] == new_tensor.item():
                     input.grad[idx] += new_tensor.grad
                 else:
                     input.grad[idx] += 0.0
         else:
-            for idx in itertools.product(
-                *[range(dim) for dim in new_tensor.shape]
-            ):
+            for idx in pdt(*[range(dim) for dim in new_tensor.shape]):
                 indices = list(idx)
                 if keepdim:
                     indices[dim] = slice(None)
@@ -1023,7 +1005,7 @@ def mean(
     :param keepdim: A boolean indicating whether to retain the reduced
         dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the mean of the specified elements.
-    :raises ValueError: If the specified dimension is invalid.
+    :raises IndexError: If the specified dimension is invalid.
     """
     ndim = input.ndim
     if dim is not None:
@@ -1075,12 +1057,10 @@ def mean(
         if not hasattr(input, "grad") or input.grad is None:
             input.grad = Tensor(input.shape, input.dtype)
         if dim is None:
-            for idx in itertools.product(*[range(dim) for dim in input.shape]):
+            for idx in pdt(*[range(dim) for dim in input.shape]):
                 input.grad[idx] += new_tensor.grad / input.nelement()
         else:
-            for idx in itertools.product(
-                *[range(dim) for dim in new_tensor.shape]
-            ):
+            for idx in pdt(*[range(dim) for dim in new_tensor.shape]):
                 indices = list(idx)
                 if keepdim:
                     indices[dim] = slice(None)
@@ -1128,7 +1108,7 @@ def std(
         dimensions in the resulting tensor, defaults to `False`.
     :return: A new tensor containing the standard deviation of the
         specified elements.
-    :raises ValueError: If the specified dimension is invalid.
+    :raises IndexError: If the specified dimension is invalid.
     """
     ndim = input.ndim
     if dim is not None:
@@ -1182,14 +1162,12 @@ def std(
         if dim is None:
             mu = input.mean()
             N = input.nelement()
-            for idx in itertools.product(*[range(dim) for dim in input.shape]):
+            for idx in pdt(*[range(dim) for dim in input.shape]):
                 input.grad[idx] += (
                     new_tensor.grad / ((N - correction) * new_tensor)
                 ) * (input[idx] - mu)
         else:
-            for idx in itertools.product(
-                *[range(dim) for dim in new_tensor.shape]
-            ):
+            for idx in pdt(*[range(dim) for dim in new_tensor.shape]):
                 indices = list(idx)
                 if keepdim:
                     indices[dim] = slice(None)
@@ -1245,7 +1223,7 @@ def exp(input: Tensor) -> Tensor:
         """
         if not hasattr(input, "grad") or input.grad is None:
             input.grad = Tensor(input.shape, input.dtype)
-        for idx in itertools.product(*[range(dim) for dim in input.shape]):
+        for idx in pdt(*[range(dim) for dim in input.shape]):
             input.grad[idx] += new_tensor[idx] * new_tensor.grad[idx]
 
     new_tensor.grad_fn = Node(ExpBackward0)
@@ -1265,7 +1243,6 @@ def sqrt(input: Tensor) -> Tensor:
         square root is to be computed.
     :return: A new tensor containing the square root of each element
         in the input tensor.
-    :raises ValueError: If the input tensor contains negative values.
     """
     new_tensor = Tensor(
         input.shape,
@@ -1317,7 +1294,7 @@ def relu(input: Tensor) -> Tensor:
     if len(input.shape) == 1:
         iterator = range(input.shape[0])
     else:
-        iterator = itertools.product(*[range(dim) for dim in input.shape])
+        iterator = pdt(*[range(dim) for dim in input.shape])
     for dim in iterator:
         try:
             new_tensor[dim] = safe_max(input[dim])
@@ -1372,7 +1349,7 @@ def elu(input: Tensor, alpha: float = 1.0) -> Tensor:
     if len(input.shape) == 1:
         iterator = range(input.shape[0])
     else:
-        iterator = itertools.product(*[range(dim) for dim in input.shape])
+        iterator = pdt(*[range(dim) for dim in input.shape])
     for dim in iterator:
         try:
             if input[dim] <= 0:
@@ -1429,7 +1406,7 @@ def tanh(input: Tensor) -> Tensor:
     if len(input.shape) == 1:
         iterator = range(input.shape[0])
     else:
-        iterator = itertools.product(*[range(dim) for dim in input.shape])
+        iterator = pdt(*[range(dim) for dim in input.shape])
     for dim in iterator:
         try:
             new_tensor[dim] = (
@@ -1483,7 +1460,7 @@ def sigmoid(input: Tensor) -> Tensor:
     if len(input.shape) == 1:
         iterator = range(input.shape[0])
     else:
-        iterator = itertools.product(*[range(dim) for dim in input.shape])
+        iterator = pdt(*[range(dim) for dim in input.shape])
     for dim in iterator:
         try:
             data.append(1.0 / (1.0 + safe_exp(input[dim])))
@@ -1787,8 +1764,8 @@ def nll_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     def NllLossBackward0() -> None:
         """Backpropagation implementation for NLL loss.
 
-        Computes gradients for the `input` and `target` tensors and
-        propagates them backward through the computational graph.
+        Computes gradients for the `input` tensor and propagate them
+        backward through the computational graph.
         """
         grad = Tensor(input.shape, input.dtype)
         for dim in range(input.shape[0]):
@@ -1802,7 +1779,7 @@ def nll_loss(input: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
             input.grad += grad
 
     new_tensor.grad_fn = Node(NllLossBackward0)
-    new_tensor.grad_fn.inputs = (input, target)
+    new_tensor.grad_fn.inputs = (input,)
     return new_tensor
 
 
@@ -1830,6 +1807,42 @@ def cross_entropy(
     :return: A scalar tensor representing the Cross Entropy loss.
     """
     return nll_loss(log_softmax(input, dim=1), target, reduction)
+
+
+@function_dispatch
+def embedding(input: Tensor, weight: Tensor) -> Tensor:
+    """Generate an embedding lookup from a weight matrix using input
+    indices.
+
+    The embedding function retrieves rows from the `weight` matrix
+    based on integer indices from `input`. Each entry in `input`
+    corresponds to a vector in `weight`. If `padding_idx` is set,
+    gradients for that index will be masked (i.e., not updated during
+    backpropagation).
+
+    :param input: Tensor of indices.
+    :param weight: Embedding matrix.
+    :return: Tensor plucked out of the embedding matrix represented by
+        the tensor of indices.
+    """
+    new_tensor = weight[input]
+
+    def EmbeddingBackward0() -> None:
+        """Backpropagation implementation for embedding lookup.
+
+        Accumulates gradients into the `weight` tensor for all positions
+        gathered from during the forward pass. Skips `padding_idx`.
+        """
+        if not hasattr(weight, "grad") or weight.grad is None:
+            weight.grad = Tensor(weight.shape, weight.dtype)
+        for idx, data in enumerate(input.storage):
+            dims = list(pdt(*[range(dim) for dim in input.shape]))[idx]
+            for jdx in range(weight.shape[1]):
+                weight.grad[data, jdx] += new_tensor.grad[dims + (jdx,)]
+
+    new_tensor.grad_fn = Node(EmbeddingBackward0)
+    new_tensor.grad_fn.inputs = (weight,)
+    return new_tensor
 
 
 @function_dispatch
