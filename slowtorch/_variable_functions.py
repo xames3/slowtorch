@@ -66,11 +66,69 @@ from slowtorch._random import Generator
 from slowtorch._random import default_generator
 from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
+from slowtorch._types import ArrayLike
 from slowtorch._types import Number
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
 from slowtorch._utils import _fill_tensor
+from slowtorch._utils import calculate_shape_from_data
 from slowtorch._utils import dtypecheck
+from slowtorch._utils import has_uniform_shape
+
+
+@function_dispatch
+def tensor(
+    data: Number | ArrayLike,
+    *,
+    dtype: None | Dtype = None,
+    device: DeviceType = None,
+    requires_grad: bool = False,
+) -> Tensor:
+    """Create a tensor from the input data.
+
+    This function initialises a tensor with a given data array,
+    optionally specifying its data type, device, and gradient
+    requirement.
+
+    :param data: The data from which to create the tensor. Must have
+        uniform shape.
+    :param dtype: The desired data type of the tensor. If None, inferred
+        automatically, defaults to `None`.
+    :param device: The device where the tensor will reside, defaults to
+        `None`.
+    :param requires_grad: Whether the tensor requires gradients for
+        backpropagation, defaults to `False`.
+    :return: A new instance of the Tensor object.
+    :raises ValueError: If the input data does not have a uniform shape.
+    """
+    if not has_uniform_shape(data):
+        raise ValueError("Input data is not uniformly nested")
+    size = size if (size := calculate_shape_from_data(data)) else (1,)
+    array_like: list[t.Any] = []
+
+    def chain_from_iterable(object: Number | ArrayLike) -> None:
+        """Recursively flatten the input iterable."""
+        if isinstance(object, Iterable) and not isinstance(data, (str, bytes)):
+            for idx in object:
+                chain_from_iterable(idx)
+        else:
+            array_like.append(object)
+
+    chain_from_iterable(data)
+    if dtype is None:
+        types = set(type(x) for x in array_like)
+        dtype = (
+            bool
+            if types <= {bool}
+            else (
+                slowtorch.int64
+                if types <= {int}
+                else slowtorch.float32 if types <= {int, float} else None
+            )
+        )
+    new_tensor = Tensor(size, dtype, device, requires_grad)
+    new_tensor[:] = array_like
+    return new_tensor
 
 
 @function_dispatch
@@ -108,9 +166,9 @@ def randn(
         )
     shape: tuple[int, ...]
     if len(size) == 1 and isinstance(size[0], Iterable):
-        shape = tuple(size[0])
+        shape = size[0]
     else:
-        shape = tuple(size)
+        shape = size
     new_tensor = Tensor(shape, dtype, device, requires_grad)
     numel = 1
     for dim in shape:
@@ -155,9 +213,9 @@ def rand(
         )
     shape: tuple[int, ...]
     if len(size) == 1 and isinstance(size[0], Iterable):
-        shape = tuple(size[0])
+        shape = size[0]
     else:
-        shape = tuple(size)
+        shape = size
     new_tensor = Tensor(shape, dtype, device, requires_grad)
     numel = 1
     for dim in shape:
@@ -203,9 +261,9 @@ def randint(
     if isinstance(size, tuple):
         shape: tuple[int, ...]
         if len(size) == 1 and isinstance(size[0], Iterable):
-            shape = tuple(size[0])
+            shape = size[0]
         else:
-            shape = tuple(size)
+            shape = size
         new_tensor = Tensor(shape, dtype, device, requires_grad)
         numel = 1
         for dim in shape:
@@ -323,9 +381,9 @@ def empty(
         )
     shape: tuple[int, ...]
     if len(size) == 1 and isinstance(size[0], Iterable):
-        shape = tuple(size[0])
+        shape = size[0]
     else:
-        shape = tuple(size)
+        shape = size
     new_tensor = Tensor(shape, dtype, device, requires_grad)
     zero = 0.0 if dtypecheck(dtype) == slowtorch.float32 else 0
     new_tensor.fill_(zero)
@@ -713,7 +771,7 @@ def cat(
         raise ValueError("Tensors must have same shapes and dimensions")
     size = list(tensors[0].shape)
     size[dim] = size[dim] * len(tensors)
-    new_tensor = empty(*tuple(size), dtype=tensors[0].dtype)
+    new_tensor = empty(*size, dtype=tensors[0].dtype)
     offset = 0
     for tensor in tensors:
         slices = [slice(None)] * len(tensor.shape)

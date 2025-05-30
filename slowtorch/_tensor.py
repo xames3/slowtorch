@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Wednesday, May 28 2025
+Last updated on: Thursday, May 29 2025
 
 Tensor object.
 
@@ -29,15 +29,15 @@ on external libraries.
 
 The module supports features such as::
 
-    - Efficient storage and representation of n-dimensional data.
     - The primary `Tensor` object supports auto-differentiation.
+    - Efficient storage and representation of n-dimensional data.
     - Flexible shape manipulation, including reshaping and broadcasting.
     - Element-wise operations, including arithmetic, logical, and
       comparison operations, via rich operator overloading.
     - Slicing and indexing support for intuitive data access.
     - Conversion utilities to export data to native Python types
       (e.g., lists).
-    - Tensor based operations such as unsqueezing,, clamping, reshaping,
+    - Tensor based operations such as unsqueezing, clamping, reshaping,
       transposing, cloning, etc.
     - Linear algebraic operations such as calulating maximum, minimum,
       mean, standard deviation, exponent, log, square root etc.
@@ -64,27 +64,24 @@ from __future__ import annotations
 
 import builtins
 import ctypes
-import itertools
 import pickle
 import types
 import typing as t
 from collections import OrderedDict
 from collections.abc import Iterable
+from itertools import product as pdt
 
 import slowtorch
 from slowtorch import function_dispatch
 from slowtorch._types import FILE_LIKE
-from slowtorch._types import ArrayLike
 from slowtorch._types import IndexLike
 from slowtorch._types import Number
 from slowtorch._utils import Device
 from slowtorch._utils import Dtype
 from slowtorch._utils import Size
-from slowtorch._utils import calculate_shape_from_data
 from slowtorch._utils import calculate_size
 from slowtorch._utils import calculate_strides
 from slowtorch._utils import get_step
-from slowtorch._utils import has_uniform_shape
 from slowtorch._utils import safe_round
 from slowtorch._utils import set_module
 
@@ -211,7 +208,6 @@ class Tensor:
     :param strides: Memory strides for each dimension, defaults
         to `None`.
     :raises RuntimeError: If an unsupported device is specified.
-    :raises TypeError: If the shape is not an iterable of integers.
     :raises ValueError: If invalid strides or offsets are provided.
     """
 
@@ -420,6 +416,8 @@ class Tensor:
         This method attempts to convert a tensor instance to a scalar
         float. The conversion is only possible if the tensor contains
         exactly one element.
+
+        :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
             return float(self.buffer[self._offset])
@@ -433,6 +431,8 @@ class Tensor:
         This method attempts to convert a tensor instance to a scalar
         int. The conversion is only possible if the tensor contains
         exactly one element.
+
+        :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
             return builtins.int(self.buffer[self._offset])
@@ -446,6 +446,8 @@ class Tensor:
         This method attempts to convert a tensor instance to a scalar
         bool. The conversion is only possible if the tensor contains
         exactly one element.
+
+        :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
             return builtins.bool(self.buffer[self._offset])
@@ -465,7 +467,7 @@ class Tensor:
             raise IndexError("Tensor has no dimensions")
         return self.shape[0]
 
-    def __getitem__(self, indices: IndexLike) -> t.Any | Tensor:
+    def __getitem__(self, indices: IndexLike | Tensor) -> t.Any | Tensor:
         """Retrieve a scalar or a sub-tensor based on the specified index
         or slice.
 
@@ -477,9 +479,27 @@ class Tensor:
 
         :param indices: Index or slice object, or tuple of them.
         :return: Scalar or sub-array as per the indexing operation.
-        :raises IndexError: For invalid indexing.
-        :raises TypeError: For unsupported indices types.
+        :raises IndexError: For invalid indexing and unsupported indices
+            types.
         """
+        if isinstance(indices, Tensor):
+            if indices.dtype != slowtorch.int64:
+                raise IndexError(
+                    "tensors used as indices must be long or int tensors"
+                )
+            new_tensor = Tensor(
+                indices.shape + self.shape[1:],
+                self.dtype,
+                requires_grad=self.requires_grad,
+            )
+            for idx, data in enumerate(indices.storage):
+                dims = list(pdt(*[range(dim) for dim in indices.shape]))[idx]
+                if len(self.shape) == 1:
+                    new_tensor[dims] = self[data]
+                else:
+                    for jdx in range(self.shape[1]):
+                        new_tensor[dims + (jdx,)] = self[data][jdx]
+            return new_tensor
         if not isinstance(indices, tuple):
             indices = (indices,)
         for idx in range(indices.count(Ellipsis)):
@@ -609,10 +629,8 @@ class Tensor:
                     f"{idx}"
                 )
         data = []
-        for idx in itertools.product(*(range(dim) for dim in size)):
-            index = tuple(
-                0 if pdx == 1 else jdx for jdx, pdx in zip(idx, padded)
-            )
+        for idx in pdt(*(range(dim) for dim in size)):
+            index = tuple(0 if p == 1 else j for j, p in zip(idx, padded))
             base = sum(bdx * sdx for bdx, sdx in zip(index, self.stride()))
             data.append(self.storage[base])
         new_tensor = Tensor(size, self.dtype, requires_grad=self.requires_grad)
@@ -631,9 +649,6 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             addition.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.add(self, other)
 
@@ -657,9 +672,6 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             subtraction.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.sub(self, other)
 
@@ -683,9 +695,6 @@ class Tensor:
             an tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             multiplication.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.mul(self, other)
 
@@ -709,9 +718,6 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             division.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.div(self, other)
 
@@ -727,9 +733,6 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             division.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.div(other, self)
 
@@ -745,9 +748,6 @@ class Tensor:
             tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             division.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.div(self, other, rounding_mode="floor")
 
@@ -780,9 +780,6 @@ class Tensor:
             or a tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             modulo operation.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.remainder(self, other)
 
@@ -798,9 +795,6 @@ class Tensor:
             a tensor of the same shape.
         :return: A new tensor containing the result of the element-wise
             exponentiation.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return slowtorch.nn.functional.pow(self, other)
 
@@ -1022,7 +1016,7 @@ class Tensor:
         if self.nelement() != calculate_size(value):
             raise ValueError("New shape is incompatible with the current size")
         if get_step(self) == 1:
-            self._shape = tuple(value)
+            self._shape = value
             self._strides = calculate_strides(self._shape, self.itemsize)
             return
         shape = [dim for dim in self.shape if dim > 1]
@@ -1048,7 +1042,7 @@ class Tensor:
             raise AttributeError(
                 "New shape is incompatible with the current memory layout"
             )
-        self._shape = tuple(value)
+        self._shape = value
         self._strides = tuple(reversed(new_strides))
 
     @property
@@ -1136,8 +1130,6 @@ class Tensor:
         :param dtype: The desired data type for the output tensor.
         :return: A new tensor with the specified data type and the same
             shape as the original tensor.
-        :raises ValueError: If `dtype` is invalid or cannot be applied
-            to the tensor.
 
         .. note::
 
@@ -1359,7 +1351,6 @@ class Tensor:
         :param dim0: First dimension to be transposed.
         :param dim1: Second dimension to be transposed.
         :return: A new tensor view with transposed dimensions.
-        :raises ValueError: If the provided dimensions are invalid.
         """
         return slowtorch.nn.functional.transpose(self, dim0, dim1)
 
@@ -1388,7 +1379,7 @@ class Tensor:
             self.device,
             self.requires_grad,
         )
-        new_tensor[:] = tuple(py_sorted(unique) if sorted else unique)
+        new_tensor[:] = py_sorted(unique) if sorted else unique
         return new_tensor
 
     def neg(self) -> Tensor:
@@ -1460,9 +1451,6 @@ class Tensor:
         :param alpha: The multiplier for other, defaults to 1.
         :return: A new tensor containing the result of the element-wise
             addition.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return self.__add__(alpha * other)
 
@@ -1479,9 +1467,6 @@ class Tensor:
         :param alpha: The multiplier for other, defaults to 1.
         :return: A new tensor containing the result of the element-wise
             subtraction.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return self.__sub__(alpha * other)
 
@@ -1498,9 +1483,6 @@ class Tensor:
         :param alpha: The multiplier for other, defaults to 1.
         :return: A new tensor containing the result of the element-wise
             multiplication.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         return self.__mul__(alpha * other)
 
@@ -1520,9 +1502,6 @@ class Tensor:
             defaults to `None`.
         :return: A new tensor containing the result of the element-wise
             division.
-        :raises TypeError: If `other` is neither a scalar nor a tensor.
-        :raises ValueError: If `other` is a tensor but its shape
-            doesn't match `self.shape`.
         """
         if rounding_mode is not None:
             raise RuntimeError("Rounding mode is not supported")
@@ -1734,7 +1713,6 @@ class Tensor:
             `False`.
         :return: A new tensor containing the sum of the specified
             elements.
-        :raises ValueError: If the specified dimension is invalid.
         """
         return slowtorch.nn.functional.sum(self, dim, keepdim)
 
@@ -1759,7 +1737,6 @@ class Tensor:
             `False`.
         :return: A new tensor containing the maximum of the specified
             elements.
-        :raises ValueError: If the specified dimension is invalid.
         """
         return slowtorch.nn.functional.max(self, dim, keepdim)
 
@@ -1784,7 +1761,6 @@ class Tensor:
             `False`.
         :return: A new tensor containing the minimum of the specified
             elements.
-        :raises ValueError: If the specified dimension is invalid.
         """
         return slowtorch.nn.functional.min(self, dim, keepdim)
 
@@ -1809,7 +1785,6 @@ class Tensor:
             `False`.
         :return: A new tensor containing the mean of the specified
             elements.
-        :raises ValueError: If the specified dimension is invalid.
         """
         return slowtorch.nn.functional.mean(self, dim, keepdim)
 
@@ -1834,7 +1809,6 @@ class Tensor:
             `False`.
         :return: A new tensor containing the standard deviation of the
             specified elements.
-        :raises ValueError: If the specified dimension is invalid.
         """
         return slowtorch.nn.functional.std(self, dim, keepdim)
 
@@ -1861,8 +1835,6 @@ class Tensor:
 
         :return: A new tensor containing the square root of each element
             in the input tensor.
-        :raises ValueError: If the input tensor contains negative
-            values.
         """
         return slowtorch.nn.functional.sqrt(self)
 
@@ -1963,78 +1935,6 @@ class Tensor:
             with gradients linked for backpropagation.
         """
         return slowtorch.nn.functional.log_softmax(self, dim=dim, dtype=dtype)
-
-
-@set_module("slowtorch")
-@function_dispatch
-class tensor(Tensor):
-    """Construct a tensor with no autograd history by copying data.
-
-    This class initialises a tensor with a given data array, optionally
-    specifying its data type, device, and gradient requirement.
-
-    :param data: The data from which to create the tensor. Must have
-        uniform shape.
-    :param dtype: The desired data type of the tensor. If None, inferred
-        automatically, defaults to `None`.
-    :param device: The device where the tensor will reside, defaults to
-        `None`.
-    :param requires_grad: Whether the tensor requires gradients for
-        backpropagation, defaults to `False`.
-    :raises ValueError: If the input data does not have a uniform shape.
-    """
-
-    __qualname__ = "Tensor"
-
-    def __init__(
-        self,
-        data: Number | ArrayLike,
-        *,
-        dtype: None | Dtype = None,
-        device: DeviceType = None,
-        requires_grad: builtins.bool = False,
-    ) -> None:
-        """Initialise a `tensor` object from input data."""
-        if not has_uniform_shape(data):
-            raise ValueError("Input data is not uniformly nested")
-        size = size if (size := calculate_shape_from_data(data)) else (1,)
-        array_like: list[t.Any] = []
-
-        def chain_from_iterable(object: Number | ArrayLike) -> None:
-            """Recursively flatten the input iterable."""
-            if isinstance(object, Iterable) and not isinstance(
-                data, (str, bytes)
-            ):
-                for idx in object:
-                    chain_from_iterable(idx)
-            else:
-                array_like.append(object)
-
-        chain_from_iterable(data)
-        if dtype is None:
-            dtype = (
-                bool
-                if all(isinstance(idx, builtins.bool) for idx in array_like)
-                else (
-                    int64
-                    if all(
-                        isinstance(idx, int)
-                        and not isinstance(idx, builtins.bool)
-                        for idx in array_like
-                    )
-                    else (
-                        float32
-                        if all(
-                            isinstance(idx, (int, float))
-                            and not isinstance(idx, builtins.bool)
-                            for idx in array_like
-                        )
-                        else None
-                    )
-                )
-            )
-        super().__init__(size, dtype, device, requires_grad)
-        self[:] = array_like
 
 
 @function_dispatch
