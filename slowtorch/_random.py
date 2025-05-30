@@ -18,7 +18,6 @@ import random
 from slowtorch import function_dispatch
 from slowtorch._tensor import DeviceType
 from slowtorch._tensor import Tensor
-from slowtorch._tensor import tensor
 
 
 @function_dispatch
@@ -44,6 +43,8 @@ class Generator:
 
         :return: State of RNG as a `slowtorch.Tensor`.
         """
+        from slowtorch._variable_functions import tensor
+
         return tensor(self.internal.getstate())
 
     def set_state(self, state: tuple[int, ...]) -> None:
