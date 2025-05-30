@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Wednesday, May 28 2025
+Last updated on: Thursday, May 29 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -58,6 +58,7 @@ from slowtorch._variable_functions import uniform_
 
 __all__: list[str] = [
     "ELU",
+    "Embedding",
     "Flatten",
     "Identity",
     "L1Loss",
@@ -143,7 +144,7 @@ class Module:
         self._parameters: dict[str, None | Parameter] = OrderedDict()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Module` object."""
+        """Return a string representation of the `Module` class."""
         modules = "\n"
         for key, module in self._modules.items():
             modules += f"  ({key}): {module}\n"
@@ -295,7 +296,7 @@ class Flatten(Module):
         super().__init__()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Flatten` object."""
+        """Return a string representation of the `Flatten` module."""
         return f"{type(self).__name__}()"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -315,7 +316,7 @@ class Identity(Module):
         super().__init__()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Identity` object."""
+        """Return a string representation of the `Identity` module."""
         return f"{type(self).__name__}()"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -394,7 +395,7 @@ class Linear(Module):
         self.reset_parameters()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Linear` object."""
+        """Return a string representation of the `Linear` module."""
         return (
             f"{type(self).__name__}(in_features={self.in_features}, "
             f"out_features={self.out_features}, bias={self.bias is not None})"
@@ -435,6 +436,78 @@ class Linear(Module):
         return slowtorch.nn.functional.linear(input, self.weight, self.bias)
 
 
+@set_module("slowtorch.nn.modules.sparse")
+class Embedding(Module):
+    """A simple lookup table that stores embeddings of a fixed dictionary
+    and size.
+
+    This module is often used to store word embeddings and retrieve them
+    using indices. The input to the module is a list of indices, and the
+    output is the corresponding word embeddings.
+
+    :param num_embeddings: Size of the dictionary of embeddings.
+    :param embedding_dim: The size of each embedding vector.
+    :param _weight: The learnable weights (embedding matrix) created
+        from a normal distribution, defaults to `None`.
+    :param _freeze: Boolean flag for freeze gradients during the backward
+        pass, defaults to `False`.
+    :param device: Specifies the device (e.g., CPU or GPU) on which the
+        parameters will be allocated, defaults to `None`.
+    :param dtype: Specifies the data type for the parameters, defaults
+        to `None`.
+    """
+
+    num_embeddings: int
+    embedding_dim: int
+    weight: Tensor
+
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        _weight: None | Tensor = None,
+        _freeze: bool = False,
+        device: DeviceType = None,
+        dtype: None | Dtype = None,
+    ) -> None:
+        """Initialise the `Embedding` module with the specified number of
+        embeddings and embedding dimensions, and optionally include
+        weights (embedding tensor).
+        """
+        super().__init__()
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        if _weight is None:
+            self.weight = Parameter(
+                randn(
+                    embedding_dim, num_embeddings, dtype=dtype, device=device
+                ),
+                requires_grad=not _freeze,
+            )
+        else:
+            self.weight = Parameter(_weight, requires_grad=not _freeze)
+        self.weight = self.weight.T
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Embedding` module."""
+        return (
+            f"{type(self).__name__}({self.num_embeddings}, "
+            f"{self.embedding_dim})"
+        )
+
+    def forward(self, input: Tensor) -> Tensor:
+        """Perform the forward pass of the embedding layer.
+
+        The forward pass pops off and returns the corresponding word
+        embeddings at the respective input indices.
+
+        :param input: The input tensor representing indices.
+        :return: Tensor plucked out of the `weight` (embedding matrix)
+            represented by the input.
+        """
+        return slowtorch.nn.functional.embedding(input, self.weight)
+
+
 @set_module("slowtorch.nn.modules.activation")
 class ReLU(Module):
     """Represents a Rectified Linear Unit (ReLU) activation layer.
@@ -458,7 +531,7 @@ class ReLU(Module):
         super().__init__()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `ReLU` object."""
+        """Return a string representation of the `ReLU` module."""
         return f"{type(self).__name__}()"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -496,7 +569,7 @@ class ELU(Module):
         self.alpha = alpha
 
     def __repr__(self) -> str:
-        """Return a string representation of the `ELU` object."""
+        """Return a string representation of the `ELU` module."""
         return f"{type(self).__name__}(alpha={self.alpha})"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -532,7 +605,7 @@ class Tanh(Module):
         super().__init__()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Tanh` object."""
+        """Return a string representation of the `Tanh` module."""
         return f"{type(self).__name__}()"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -568,7 +641,7 @@ class Sigmoid(Module):
         super().__init__()
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Sigmoid` object."""
+        """Return a string representation of the `Sigmoid` module."""
         return f"{type(self).__name__}()"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -610,7 +683,7 @@ class Softmax(Module):
         self.dim = dim
 
     def __repr__(self) -> str:
-        """Return a string representation of the `Softmax` object."""
+        """Return a string representation of the `Softmax` module."""
         return f"{type(self).__name__}(dim={self.dim})"
 
     def forward(self, input: Tensor) -> Tensor:
@@ -647,7 +720,7 @@ class LogSoftmax(Module):
         self.dim = dim
 
     def __repr__(self) -> str:
-        """Return a string representation of the `LogSoftmax` object."""
+        """Return a string representation of the `LogSoftmax` module."""
         return f"{type(self).__name__}(dim={self.dim})"
 
     def forward(self, input: Tensor) -> Tensor:
