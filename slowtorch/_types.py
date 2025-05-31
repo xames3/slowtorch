@@ -24,6 +24,7 @@ will occur.
 from __future__ import annotations
 
 import os
+import types
 import typing as t
 
 __all__: list[str] = [
@@ -48,4 +49,10 @@ DTypeLike: t.TypeAlias = None | type[t.Any] | str | VoidDTypeLike
 FILE_LIKE: t.TypeAlias = (
     int | str | bytes | os.PathLike[str] | os.PathLike[bytes]
 )
-IndexLike: t.TypeAlias = int | slice | tuple[None | int | slice, ...]
+IndexLike: t.TypeAlias = (
+    int
+    | slice
+    | types.EllipsisType
+    | None
+    | tuple[int | slice | types.EllipsisType | None, ...]
+)

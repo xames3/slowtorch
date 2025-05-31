@@ -32,7 +32,7 @@ class Generator:
 
     __module__: str = "slowtorch._C"
 
-    def __init__(self, device: DeviceType = None) -> None:
+    def __init__(self, device: "DeviceType" = None) -> None:
         """Initialise a `Generator` instance with device."""
         self.device = device
         self.internal = random.Random()

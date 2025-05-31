@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Wednesday, May 28 2025
+Last updated on: Saturday, May 31 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -65,15 +65,15 @@ from slowtorch import function_dispatch
 from slowtorch._random import Generator
 from slowtorch._random import default_generator
 from slowtorch._tensor import DeviceType
+from slowtorch._tensor import Dtype
+from slowtorch._tensor import Size
 from slowtorch._tensor import Tensor
+from slowtorch._tensor import check_same_shape
+from slowtorch._tensor import dtypecheck
+from slowtorch._tensor import infer_size_shapes
 from slowtorch._types import ArrayLike
 from slowtorch._types import Number
-from slowtorch._utils import Dtype
-from slowtorch._utils import Size
 from slowtorch._utils import _fill_tensor
-from slowtorch._utils import calculate_shape_from_data
-from slowtorch._utils import dtypecheck
-from slowtorch._utils import has_uniform_shape
 
 
 @function_dispatch
@@ -101,9 +101,9 @@ def tensor(
     :return: A new instance of the Tensor object.
     :raises ValueError: If the input data does not have a uniform shape.
     """
-    if not has_uniform_shape(data):
+    if not check_same_shape(data):
         raise ValueError("Input data is not uniformly nested")
-    size = size if (size := calculate_shape_from_data(data)) else (1,)
+    size = size if (size := infer_size_shapes(data)) else (1,)
     array_like: list[t.Any] = []
 
     def chain_from_iterable(object: Number | ArrayLike) -> None:

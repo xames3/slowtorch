@@ -4,7 +4,7 @@ SlowTorch Tensor API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Thursday, May 29 2025
+Last updated on: Saturday, May 31 2025
 
 Tensor object.
 
@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import builtins
 import ctypes
+import math
 import pickle
 import types
 import typing as t
@@ -76,13 +77,6 @@ from slowtorch import function_dispatch
 from slowtorch._types import FILE_LIKE
 from slowtorch._types import IndexLike
 from slowtorch._types import Number
-from slowtorch._utils import Device
-from slowtorch._utils import Dtype
-from slowtorch._utils import Size
-from slowtorch._utils import calculate_size
-from slowtorch._utils import calculate_strides
-from slowtorch._utils import get_step
-from slowtorch._utils import safe_round
 from slowtorch._utils import set_module
 
 __all__: list[str] = [
@@ -102,11 +96,125 @@ __all__: list[str] = [
     "uint8",
 ]
 
-DeviceType = None | str | int | Device
+py_impl_int = builtins.int
+py_impl_bool = builtins.bool
+py_impl_min = builtins.min
+py_impl_max = builtins.max
+py_impl_sorted = builtins.sorted
+py_impl_round = builtins.round
+py_impl_sum = builtins.sum
 
-py_min = min
-py_max = max
-py_sorted = sorted
+
+class PrinterOptions:
+    """Printer options to mimic PyTorch's way."""
+
+    precision: int = 4
+
+
+@set_module("slowtorch")
+@function_dispatch
+class Device:
+    """Represent a computational device for executing Tensor operations.
+
+    The `Device` class in SlowTorch encapsulates the concept of a
+    computation backend, such as `cpu`. It provides a way to specify the
+    target device where Tensor computations will occur, including
+    support for multi-device systems using an optional device index.
+
+    This abstraction allows users to explicitly manage computational
+    resources, mimicking PyTorch's `torch.device` behavior.
+
+    :param type: The type of the device, defaults to `cpu`.
+    :param index: An optional index representing the device number,
+        defaults to 0.
+    """
+
+    __qualname__: str = "device"
+
+    def __init__(self, type: str = "cpu", index: int = 0) -> None:
+        """Initialise a new `Device` object with default index."""
+        self.type = type
+        self.index = index
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Device` object."""
+        return f"device(type={self.type!r}, index={self.index})"
+
+    def __str__(self) -> str:
+        """Return a human-readable string representation."""
+        return f"{self.type}:{self.index}"
+
+
+@set_module("slowtorch")
+@function_dispatch
+class Dtype:
+    """Represent data types used in the SlowTorch framework.
+
+    The `Dtype` class encapsulates information about supported datatypes
+    for tensor operations and storage in SlowTorch. It provides a way to
+    describe the type of data stored in tensors, its size in bytes, and
+    associated metadata.
+
+    :param name: The full name of the datatype.
+    :param short: A shorthand representation of the datatype, where the
+        last character specifies the size in bytes.
+    :param data: A representation of the type's data structure or
+        internal details.
+    :param value: A representative value for the data type, used for
+        internal operations or comparisons.
+    :param typename: A `typename` similar to PyTorch tensors.
+    """
+
+    __qualname__: str = "dtype"
+
+    def __init__(
+        self,
+        name: str,
+        short: str,
+        data: t.Any,
+        value: Number,
+        typename: str,
+    ) -> None:
+        """Initialise a new `Dtype` object with name and value."""
+        self.name = name
+        self.itemsize = int(short[-1])
+        self.data = data
+        self.value = value
+        self.typename = typename
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Dtype` object."""
+        return f"slowtorch.{self.name}"
+
+
+@function_dispatch
+class Size(tuple[int, ...]):
+    """Represent the shape of a tensor as a tuple of integers.
+
+    This class extends the built-in tuple to provide a clear and
+    descriptive representation for tensor dimensions.
+
+    :param iterable: A tuple representing the dimensions of the tensor.
+    """
+
+    def __init__(self, iterable: tuple[int, ...]) -> None:
+        """Initialise a `Size` instance with some iterable."""
+        if not all(isinstance(dim, int) and dim >= 0 for dim in iterable):
+            raise ValueError("Dimensions must be non-negative")
+        self.iterable = iterable
+
+    def __repr__(self) -> str:
+        """Return a string representation of the `Size` object."""
+        return f"slowtorch.{type(self).__qualname__}({list(self.iterable)})"
+
+    def numel(self) -> int:
+        """Return total number of elements a tensor would contain."""
+        return numel(self.iterable)
+
+
+DeviceType: t.TypeAlias = None | str | int | Device
+ShapeType: t.TypeAlias = Size | tuple[int, ...]
+StrideType: t.TypeAlias = list[int] | tuple[int, ...]
 
 supported_dtypes: tuple[Dtype, ...] = (
     (bool := Dtype("bool", "b1", ctypes.c_bool, False, "BoolTensor")),
@@ -130,15 +238,6 @@ for dtype in supported_dtypes:
     globals()[dtype] = dtype
 
 
-class PrinterOptions:
-    """Printer options to mimic PyTorch's way."""
-
-    precision: int = 4
-
-
-PRINT_OPTS = PrinterOptions()
-
-
 @function_dispatch
 def set_printoptions(precision: None | int = None) -> None:
     """Set options for printing."""
@@ -147,6 +246,187 @@ def set_printoptions(precision: None | int = None) -> None:
     if precision is None:
         precision = 4
     Tensor._print_opts.precision = precision
+
+
+@function_dispatch
+def infer_size_shapes(data: t.Any) -> Size:
+    """Infer the shape of a nested iterable structure and represent it
+    as a Tensor.
+
+    This function recursively determines the dimensions of a nested
+    structure (e.g., a list of lists) and converts it into a tuple of
+    integers representing the corresponding Tensor shape.
+
+    :param data: A nested iterable structure that can be converted
+        into a Tensor. Each level of nesting corresponds to a dimension
+        in the shape.
+    :return: A tuple of integers representing the shape of the input
+        data.
+    """
+    shape: list[int] = []
+
+    def infer_size(a: t.Any, numel: int) -> None:
+        """Helper function to calculate shape recursively."""
+        if isinstance(a, t.Sized) and not isinstance(a, (str, bytes)):
+            if len(shape) <= numel:
+                shape.append(0)
+            length = len(a)
+            if length > shape[numel]:
+                shape[numel] = length
+            for element in a:
+                infer_size(element, numel + 1)
+
+    infer_size(data, 0)
+    return Size(tuple(shape))
+
+
+@function_dispatch
+def make_contiguous_strides(shape: ShapeType, itemsize: int) -> Size:
+    """Calculate memory strides for traversing a Tensor in row-major
+    order.
+
+    Strides represent the number of bytes required to move in memory
+    between successive elements along each dimension of a Tensor. This
+    function computes strides assuming a row-major (C-style) memory
+    layout, where elements in the last dimension are stored
+    contiguously.
+
+    :param shape: A sequence of integers representing the dimensions of
+        the Tensor. Each integer specifies the size along a particular
+        dimension.
+    :param itemsize: An integer specifying the size (in bytes) of each
+        Tensor element. This depends on the data type of the Tensor.
+    :return: A tuple of integers representing the memory strides for
+        each dimension of the Tensor, in bytes.
+
+    .. note::
+
+        [1] Strides are critical for indexing Tensors efficiently and
+            correctly.
+        [2] Row-major order ensures that the last dimension changes the
+            fastest in memory.
+    """
+    strides: list[int] = []
+    stride: int = itemsize
+    for dim in reversed(shape):
+        strides.append(stride)
+        stride *= dim
+    return Size(tuple(reversed(strides)))
+
+
+@function_dispatch
+def numel(shape: t.Sequence[int] | int) -> int:
+    """Calculate the total number of elements in a Tensor based on its
+    shape.
+
+    The total number of elements in a Tensor is the product of its
+    dimensions, determined by multiplying the shape along each axis.
+
+    :param shape: An integer or sequence of integers representing the
+        dimensions of the Tensor. Each integer specifies the size along a
+        particular dimension.
+    :return: An integer representing the total number of elements in
+        the Tensor.
+    """
+    if not isinstance(shape, Iterable):
+        shape = (shape,)
+    return math.prod(shape)
+
+
+@function_dispatch
+def get_step(view: Tensor) -> int:
+    """Calculate the step size for traversing a Tensor along its last
+    dimension.
+
+    The step size determines the number of memory elements to skip when
+    moving to the next index along the last axis of the Tensor. If the
+    Tensor is C-contiguous (row-major layout), the step size is 1.
+    Non-contiguous Tensors return a step size of 0.
+
+    :param view: A Tensor object with attributes `shape`, `strides`, and
+        `itemsize`, representing its memory layout.
+    :return: An integer step size: 1 for C-contiguous Tensors, 0
+        otherwise.
+    """
+    contiguous = make_contiguous_strides(view.shape, view.itemsize)
+    step = view._strides[-1] // contiguous[-1]
+    strides = tuple(stride * step for stride in contiguous)
+    return step if view._strides == strides else 0
+
+
+@function_dispatch
+def check_same_shape(args: Tensor) -> py_impl_bool:
+    """Check if a nested iterable structure can form a Tensor with a
+    uniform shape.
+
+    A structure has a uniform shape if::
+
+        - All elements along the same axis have the same shape.
+        - Sub-elements (if any) also follow uniformity.
+
+    :param args: A nested iterable structure to validate for Tensor
+        compatibility.
+    :return: True if the structure has a uniform shape, otherwise False.
+    """
+    if not isinstance(args, t.Iterable):
+        return True
+    return (
+        all(check_same_shape(arg) for arg in args)
+        and len(set(len(arg) for arg in args if isinstance(arg, t.Sized))) <= 1
+    )
+
+
+@set_module("slowtorch")
+@function_dispatch
+def broadcast_shapes(input: Size, other: Size) -> ShapeType:
+    """Calculate the broadcast-compatible shape for two tensors.
+
+    This function aligns the two shapes from the right, padding the
+    smaller shape with `1`s on the left. Then, it checks compatibility
+    for broadcasting::
+
+        - Each tensor has at least one dimension.
+        - Dimension sizes must either be equal, one of them is 1 or
+          one of them does not exist.
+
+    :param input: Shape of the first tensor.
+    :param other: Shape of the second tensor.
+    :return: The broadcast-compatible shape.
+    :raises ValueError: If the shapes are incompatible for broadcasting.
+    """
+    buffer: list[int] = []
+    r_input = list(reversed(input))
+    r_other = list(reversed(other))
+    maximum = max(len(r_input), len(r_other))
+    r_input += [1] * (maximum - len(r_input))
+    r_other.extend([1] * (maximum - len(r_other)))
+    for idx, jdx in zip(r_input, r_other):
+        if idx == jdx or idx == 1 or jdx == 1:
+            buffer.append(max(idx, jdx))
+        else:
+            raise ValueError(
+                f"Operands couldn't broadcast together with shapes {input} "
+                f"and {other}"
+            )
+    return tuple(reversed(buffer))
+
+
+def unravel_index(
+    indices: int,
+    shape: ShapeType,
+) -> ShapeType:
+    """Convert a tensor of flat indices into a multi-dimensional
+    index for a given shape.
+
+    :param indices: Index position to unravel.
+    :param shape: The shape of the tensor.
+    :return: A tuple representing the multi-dimensional index.
+    """
+    size: list[int] = []
+    for dim in reversed(shape):
+        size.append(indices % dim)
+        indices = indices // dim
+    return tuple(reversed(size))
 
 
 @set_module("slowtorch.autograd")
@@ -170,10 +450,6 @@ class Node:
         """Initialise a `Node` instance."""
         self.backward = backward
 
-    def name(self) -> str:
-        """Return the name."""
-        return self.backward.__name__ if self.backward else ""
-
     def __call__(self) -> None:
         """Execute the gradient function for this node, if defined.
 
@@ -182,6 +458,13 @@ class Node:
         """
         if self.backward:
             self.backward()
+
+    def name(self) -> str:
+        """Return the name."""
+        return self.backward.__name__ if self.backward else ""
+
+
+PRINT_OPTS = PrinterOptions()
 
 
 @set_module("slowtorch")
@@ -201,9 +484,9 @@ class Tensor:
         `None`.
     :param requires_grad: Whether gradients should be tracked for this
         tensor, defaults to `False`.
-    :param buffer:  An optional buffer to use for tensor data, defaults
-        to `None`.
-    :param offset: The starting position within the data buffer,
+    :param storage:  An optional storage buffer to use for tensor data,
+        defaults to `None`.
+    :param offset: The starting position within the data storage buffer,
         defaults to 0.
     :param strides: Memory strides for each dimension, defaults
         to `None`.
@@ -212,16 +495,31 @@ class Tensor:
     """
 
     _print_opts = PRINT_OPTS
+    __slots__ = (
+        "_shape",
+        "_dtype",
+        "_itemsize",
+        "_strides",
+        "_storage_offset",
+        "storage",
+        "_base",
+        "device",
+        "requires_grad",
+        "grad_fn",
+        "grad",
+        "data",
+        "_cached_sizes_strides_offsets",
+    )
 
     def __init__(
         self,
-        shape: Size | tuple[int, ...] | int,
+        shape: ShapeType | int,
         dtype: None | Dtype = float32,
         device: DeviceType = None,
-        requires_grad: builtins.bool = False,
-        buffer: None | t.Any = None,
-        offset: t.SupportsIndex = 0,
-        strides: None | Size | tuple[int, ...] = None,
+        requires_grad: py_impl_bool = False,
+        storage: None | str | ctypes._CData | Tensor = None,
+        offset: int = 0,
+        strides: None | StrideType = None,
     ) -> None:
         """Initialise a `tensor` object from provided shape."""
         if device is not None and device.type != "cpu":
@@ -243,24 +541,26 @@ class Tensor:
             dtype = globals()[dtype]
         self._dtype = dtype
         self._itemsize = self._dtype.itemsize
-        self._offset = int(offset)
-        if buffer is None:
+        self._storage_offset = offset
+        if storage is None:
             self._base = None
-            if self._offset != 0:
-                raise ValueError("Offset must be 0 when buffer is None")
+            if self._storage_offset != 0:
+                raise ValueError("Offset must be 0 when storage is None")
             if strides is not None:
-                raise ValueError("Strides must be None when buffer is None")
-            self._strides = calculate_strides(self._shape, self._itemsize)
+                raise ValueError("Strides must be None when storage is None")
+            self._strides = make_contiguous_strides(
+                self._shape, self._itemsize
+            )
         else:
-            if isinstance(buffer, Tensor) and buffer.base is not None:
-                buffer = buffer.base
-            self._base = buffer
-            if isinstance(buffer, Tensor):
-                buffer = buffer.buffer
-            if self._offset < 0:
+            if isinstance(storage, Tensor) and storage.base is not None:
+                storage = storage.base
+            self._base = storage
+            if isinstance(storage, Tensor):
+                storage = storage.buffer
+            if self._storage_offset < 0:
                 raise ValueError("Offset must be non-negative")
             if strides is None:
-                strides = calculate_strides(self._shape, self._itemsize)
+                strides = make_contiguous_strides(self._shape, self._itemsize)
             elif not (
                 isinstance(strides, tuple)
                 and all(isinstance(stride, int) for stride in strides)
@@ -268,16 +568,16 @@ class Tensor:
             ):
                 raise ValueError("Invalid strides provided")
             self._strides = tuple(strides)
-        buffersize = self._strides[0] * self._shape[0] // self._itemsize
-        buffersize += self._offset
-        Buffer = self._dtype.data * buffersize
-        if buffer is None:
-            if not isinstance(Buffer, str):
-                self.storage = Buffer()
-        elif isinstance(buffer, ctypes.Array):
-            self.storage = Buffer.from_address(ctypes.addressof(buffer))
+        storage_offset = self._strides[0] * self._shape[0] // self._itemsize
+        storage_offset += self._storage_offset
+        Storage = self._dtype.data * storage_offset
+        if storage is None:
+            if not isinstance(Storage, str):
+                self.storage = Storage()
+        elif isinstance(storage, ctypes.Array):
+            self.storage = Storage.from_address(ctypes.addressof(storage))
         else:
-            self.storage = Buffer.from_buffer(buffer)
+            self.storage = Storage.from_buffer(storage)
         self.data = self
         self.grad_fn: Node = Node()
         self.grad: Tensor = None
@@ -285,16 +585,16 @@ class Tensor:
     def format_repr(
         self,
         formatted: str,
-        axis: int,
-        offset: int,
-        pad: int = 0,
+        dimension: int,
+        storage_offset: int,
+        padding: int = 0,
         whitespace: int = 0,
-        only: builtins.bool = False,
+        is_scalar: py_impl_bool = False,
         precision: int = 4,
     ) -> str:
         """Method to mimic PyTorch's tensor as close as possible."""
-        if only:
-            value = self.storage[offset]
+        if is_scalar:
+            value = self.storage[storage_offset]
             if isinstance(value, float):
                 element = f"{value:.{precision}f}".rstrip("0").rstrip(".")
                 if "." not in element:
@@ -302,27 +602,32 @@ class Tensor:
             else:
                 element = str(value)
             return element.rjust(whitespace)
-        indent = min(2, max(0, (self.ndim - axis - 1)))
-        if axis < len(self.shape):
+        indent = py_impl_min(2, py_impl_max(0, (self.ndim - dimension - 1)))
+        if dimension < len(self._shape):
             formatted += "["
-            for idx in range(self.shape[axis]):
+            for idx in range(self._shape[dimension]):
                 if idx > 0:
-                    formatted += ("\n " + " " * pad + " " * axis) * indent
-                current = offset + idx * self._strides[axis] // self._itemsize
+                    formatted += (
+                        "\n " + " " * padding + " " * dimension
+                    ) * indent
+                current = (
+                    storage_offset
+                    + idx * self._strides[dimension] // self._itemsize
+                )
                 formatted = self.format_repr(
                     formatted,
-                    axis + 1,
+                    dimension + 1,
                     current,
-                    pad,
+                    padding,
                     whitespace,
                     False,
                     precision,
                 )
-                if idx < self.shape[axis] - 1:
+                if idx < self._shape[dimension] - 1:
                     formatted += ", "
             formatted += "]"
         else:
-            value = self.storage[offset]
+            value = self.storage[storage_offset]
             if isinstance(value, float):
                 element = f"{value:.{precision}f}".rstrip("0").rstrip(".")
                 if "." not in element:
@@ -336,80 +641,41 @@ class Tensor:
         """Return a string representation of `Tensor` object."""
         precision = getattr(self._print_opts, "precision", 4)
 
-        def fmt_element(value: t.Any) -> str:
-            if isinstance(value, float):
-                out = f"{value:.{precision}f}".rstrip("0").rstrip(".")
+        def fmt_data(data: t.Any) -> str:
+            if isinstance(data, float):
+                out = f"{data:.{precision}f}".rstrip("0").rstrip(".")
                 return out + "." if "." not in out else out
-            return str(value)
+            return str(data)
 
         whitespace = 0
         if self.storage:
-            whitespace = max(len(fmt_element(value)) for value in self.storage)
-        only = len(self.storage) == 1
+            whitespace = py_impl_max(
+                len(fmt_data(value)) for value in self.storage
+            )
+        is_scalar = len(self.storage) == 1
         formatted = self.format_repr(
-            "", 0, self._offset, 7, whitespace, only, precision
+            formatted="",
+            dimension=0,
+            storage_offset=self._storage_offset,
+            padding=7,
+            whitespace=whitespace,
+            is_scalar=is_scalar,
+            precision=precision,
         )
-        extra = ""
+        extra_repr = ""
         if self.requires_grad:
             try:
                 if self.grad_fn.name():
-                    extra = f", grad_fn=<{self.grad_fn.name()}>"
+                    extra_repr = f", grad_fn=<{self.grad_fn.name()}>"
                 else:
-                    extra = ", requires_grad=True"
+                    extra_repr = ", requires_grad=True"
             except AttributeError:
-                extra = ", requires_grad=True"
+                extra_repr = ", requires_grad=True"
         if self.dtype not in (float32, float64, int64, bool):
-            return f"tensor({formatted}, dtype={self.dtype}{extra})"
-        return f"tensor({formatted}{extra})"
+            return f"tensor({formatted}, dtype={self.dtype}{extra_repr})"
+        return f"tensor({formatted}{extra_repr})"
 
-    def calculate_offset_shape_strides(
-        self, key: IndexLike
-    ) -> tuple[int, tuple[int, ...], tuple[int, ...]]:
-        """Calculate offset, shape, and strides for an indexing
-        operation.
-
-        This helper method computes the tensor metadata required for
-        retrieving a sub-array or value based on the provided key.
-        It handles integers, slices, `Ellipsis`, and `None` indexing.
-
-        :param key: Indexing specification (int, slice, tuple, etc.).
-        :return: Tuple of (offset, shape, strides).
-        :raises IndexError: For invalid axis indexing or bounds errors.
-        :raises TypeError: For unsupported key types.
-        """
-        axis: int = 0
-        offset: int = self._offset
-        shape: list[int] = []
-        strides: list[int] = []
-        for dim in key:
-            if axis >= len(self._shape) and dim is not None:
-                raise IndexError("Too many indices for tensor")
-            axissize = self._shape[axis] if axis < len(self._shape) else None
-            if isinstance(dim, int) and axissize is not None:
-                if not (-axissize <= dim < axissize):
-                    raise IndexError(
-                        f"Index {dim} of tensor is out of bounds for "
-                        f"dimension {axis}"
-                    )
-                dim = dim + axissize if dim < 0 else dim
-                offset += dim * self._strides[axis] // self.itemsize
-                axis += 1
-            elif isinstance(dim, slice) and axissize is not None:
-                start, stop, step = dim.indices(axissize)
-                shape.append(-(-(stop - start) // step) if step != 0 else 0)
-                strides.append(step * self._strides[axis])
-                offset += start * self._strides[axis] // self.itemsize
-                axis += 1
-            elif dim is None:
-                shape.append(1)
-                strides.append(0)
-            else:
-                raise TypeError(f"Invalid index type: {type(dim).__name__!r}")
-        shape.extend(self.shape[axis:])
-        strides.extend(self._strides[axis:])
-        return offset, tuple(shape), tuple(strides)
-
-    def __float__(self) -> None | float:
+    def __float__(self) -> float:
         """Convert the tensor to a scalar float if it has exactly one
         element.
 
@@ -420,11 +686,11 @@ class Tensor:
         :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
-            return float(self.buffer[self._offset])
+            return float(self.storage[self._storage_offset])
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __int__(self) -> None | builtins.int:
+    def __int__(self) -> py_impl_int:
         """Convert the tensor to a scalar int if it has exactly one
         element.
 
@@ -435,11 +701,11 @@ class Tensor:
         :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
-            return builtins.int(self.buffer[self._offset])
+            return py_impl_int(self.storage[self._storage_offset])
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __bool__(self) -> None | builtins.bool:
+    def __bool__(self) -> py_impl_bool:
         """Convert the tensor to a scalar bool if it has exactly one
         element.
 
@@ -450,7 +716,7 @@ class Tensor:
         :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
-            return builtins.bool(self.buffer[self._offset])
+            return py_impl_bool(self.storage[self._storage_offset])
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
@@ -463,9 +729,36 @@ class Tensor:
         :return: Size of the first dimension.
         :raises IndexError: If the tensor has no dimensions.
         """
-        if not self.shape:
+        if not self._shape:
             raise IndexError("Tensor has no dimensions")
-        return self.shape[0]
+        return self._shape[0]
+
+    def __iter__(self) -> t.Generator[Number]:
+        """Flatten the tensor and yield its elements one by one.
+
+        This property allows you to iterate over all elements in the
+        tensor, regardless of its shape or dimensionality, in a flattened
+        order. It yields the elements one by one, similar to Python's
+        built-in `iter()` function, and handles both contiguous and
+        non-contiguous memory layouts.
+
+        :yield: The elements of the tensor in row-major (C-style)
+            order.
+        """
+        itemsize = self._itemsize
+        strides = self._strides
+        shape = self._shape
+        storage_offset = self._storage_offset
+        storage = self.storage
+        if not shape:
+            yield storage[storage_offset]
+            return
+        stride_units = [stride // itemsize for stride in strides]
+        for index in pdt(*[range(dim) for dim in shape]):
+            offset = storage_offset + py_impl_sum(
+                idx * sdx for idx, sdx in zip(index, stride_units)
+            )
+            yield storage[offset]
 
     def __getitem__(self, indices: IndexLike | Tensor) -> t.Any | Tensor:
         """Retrieve a scalar or a sub-tensor based on the specified index
@@ -487,53 +780,54 @@ class Tensor:
                 raise IndexError(
                     "tensors used as indices must be long or int tensors"
                 )
+            shape = indices._shape
             new_tensor = Tensor(
-                indices.shape + self.shape[1:],
-                self.dtype,
+                shape + self._shape[1:],
+                dtype=self.dtype,
                 requires_grad=self.requires_grad,
             )
-            for idx, data in enumerate(indices.storage):
-                dims = list(pdt(*[range(dim) for dim in indices.shape]))[idx]
-                if len(self.shape) == 1:
-                    new_tensor[dims] = self[data]
+            for index, element in enumerate(indices.storage):
+                dimensions = unravel_index(index, shape)
+                if len(self._shape) == 1:
+                    new_tensor[dimensions] = self[element]
                 else:
-                    for jdx in range(self.shape[1]):
-                        new_tensor[dims + (jdx,)] = self[data][jdx]
+                    for dim in range(self._shape[1]):
+                        new_tensor[dimensions + (dim,)] = self[element][dim]
             return new_tensor
+        if isinstance(indices, list):
+            indices = tuple(indices)
         if not isinstance(indices, tuple):
             indices = (indices,)
-        for idx in range(indices.count(Ellipsis)):
-            pre = indices[:idx]
-            post = indices[idx + 1 :]
-            count = len(self.shape) - len(pre) - len(post)
+        for index in range(indices.count(Ellipsis)):
+            pre = indices[:index]
+            post = indices[index + 1 :]
+            count = len(self._shape) - len(pre) - len(post)
             if count < 0:
                 raise IndexError("Too many indices for tensor")
             indices = pre + (slice(None),) * count + post
-        if len(indices) < len(self.shape):
-            indices = indices + (slice(None),) * (
-                len(self.shape) - len(indices)
-            )
-        if any(isinstance(kdx, builtins.bool) for kdx in indices):
+        if len(indices) < len(self._shape):
+            indices += (slice(None),) * (len(self._shape) - len(indices))
+        if any(isinstance(kdx, py_impl_bool) for kdx in indices):
             indices = tuple(
-                int(kdx) if isinstance(kdx, builtins.bool) else kdx
-                for kdx in indices
+                int(index) if isinstance(index, py_impl_bool) else index
+                for index in indices
             )
-        offset, shape, strides = self.calculate_offset_shape_strides(indices)
-        if not shape:
-            return self.storage[offset]
+        size, strides, storage_offset = (
+            self.compute_sizes_strides_storage_offset(indices)
+        )
+        if all(dim == 1 for dim in size):
+            return self.storage[storage_offset]
         return Tensor(
-            shape,
-            self.dtype,
-            self.device,
-            self.requires_grad,
-            buffer=self,
-            offset=offset,
+            shape=size,
+            dtype=self.dtype,
+            device=self.device,
+            requires_grad=self.requires_grad,
+            storage=self,
+            offset=storage_offset,
             strides=strides,
         )
 
-    def __setitem__(
-        self, indices: IndexLike, value: Number | t.Sequence[Number] | Tensor
-    ) -> None:
+    def __setitem__(self, indices: IndexLike, value: t.Any) -> None:
         """Assign a value to a specific element or subarray within the
         tensor.
 
@@ -555,87 +849,124 @@ class Tensor:
             tuple, but must match the shape and size of the subarray
             being updated.
         """
+        if indices == Ellipsis:
+            indices = ()
         if not isinstance(indices, tuple):
             indices = (indices,)
-        offset, shape, strides = self.calculate_offset_shape_strides(indices)
-        if not shape:
-            self.storage[offset] = safe_round(
-                value, self._print_opts.precision
-            )
-            return
-        new_tensor = Tensor(
-            shape,
-            self.dtype,
-            self.device,
-            self.requires_grad,
-            buffer=self,
-            offset=offset,
-            strides=strides,
+        size, strides, storage_offset = (
+            self.compute_sizes_strides_storage_offset(indices)
         )
+        nelement = numel(size)
+        if not size:
+            self.storage[storage_offset] = value
+            return
         if isinstance(value, Number):
-            array_like = [value] * new_tensor.nelement()
-        elif isinstance(value, Iterable):
-            array_like = list(value)
+            source = [value] * nelement
+        elif isinstance(value, Iterable) and not isinstance(value, Tensor):
+            source = list(value)
         else:
             if not isinstance(value, Tensor):
                 value = Tensor(
-                    value,
-                    self.dtype,
-                    self.device,
-                    self.requires_grad,
+                    shape=value,
+                    dtype=self.dtype,
+                    device=self.device,
+                    requires_grad=self.requires_grad,
                 )
-            array_like = value.flat()
-        if new_tensor.nelement() != len(array_like):
+            source = list(value)
+        if nelement != len(source):
             raise ValueError(
-                "Number of elements in the value doesn't match the shape"
+                "Number of elements in the value doesn't match the size"
             )
-        sub_tensors = [new_tensor]
-        idx = 0
-        while sub_tensors:
-            sub_tensor = sub_tensors.pop(0)
-            if step_size := get_step(sub_tensor):
-                block = array_like[idx : idx + sub_tensor.nelement()]
-                converted: list[Number] = []
-                for element in block:
-                    if not self.dtype.name.startswith(("float", "bool")):
-                        converted.append(int(element))
-                    else:
-                        element = round(element, self._print_opts.precision)
-                        converted.append(element)
-                sub_tensor.storage[
-                    slice(
-                        sub_tensor._offset,
-                        sub_tensor._offset + sub_tensor.nelement() * step_size,
-                        step_size,
-                    )
-                ] = converted
-                idx += sub_tensor.nelement()
-            else:
-                for dim in range(sub_tensor.shape[0]):
-                    sub_tensors.append(sub_tensor[dim])
-        assert idx == len(array_like)
-
-    def broadcast_to(self, size: Size) -> Tensor:
-        """Broadcast the tensor to the target shape."""
-        if self.shape == size:
-            return self
-        if len(size) < len(self.shape) or (len(size) - len(self.shape) < 0):
-            raise ValueError(f"Cannot broadcast {self.shape} to {size}")
-        padded = (1,) * (len(size) - len(self.shape)) + self.shape
-        for idx, (pad, target) in enumerate(zip(padded, size)):
-            if pad != target and pad != 1:
-                raise ValueError(
-                    f"Cannot broadcast {self.shape} to {size} at dimension "
-                    f"{idx}"
+        current_offset = 1
+        for stride in reversed(strides):
+            if stride != 0:
+                current_offset = stride // self.itemsize
+                break
+        if current_offset == 1:
+            layout = [
+                (
+                    py_impl_int(element)
+                    if not self.dtype.name.startswith(("float", "bool"))
+                    else py_impl_round(element, self._print_opts.precision)
                 )
-        data = []
-        for idx in pdt(*(range(dim) for dim in size)):
-            index = tuple(0 if p == 1 else j for j, p in zip(idx, padded))
-            base = sum(bdx * sdx for bdx, sdx in zip(index, self.stride()))
-            data.append(self.storage[base])
-        new_tensor = Tensor(size, self.dtype, requires_grad=self.requires_grad)
-        new_tensor.storage = data
-        return new_tensor
+                for element in source
+            ]
+            self.storage[
+                slice(
+                    storage_offset,
+                    storage_offset + nelement * current_offset,
+                    current_offset,
+                )
+            ] = layout
+        else:
+            self.set_(source, storage_offset, size, strides)
+
+    def compute_sizes_strides_storage_offset(
+        self,
+        key: IndexLike,
+    ) -> tuple[ShapeType, StrideType, int]:
+        """Compute shape (size), strides, and storage offset for
+        indexing operation.
+
+        This helper method computes the tensor metadata required for
+        retrieving a sub-array or value based on the provided key.
+        It handles `Tensor`, integers, slices, `Ellipsis`, and `None`
+        indexing.
+
+        :param key: Indexing specification (int, slice, tuple, etc.).
+        :return: Tuple of (size, strides, storage offset).
+        :raises IndexError: For invalid axis indexing or bounds errors.
+        :raises TypeError: For unsupported key types.
+        """
+        if isinstance(key, list):
+            key = tuple(key)
+        if not hasattr(self, "_cached_sizes_strides_offsets"):
+            self._cached_sizes_strides_offsets: dict[
+                tuple[int, str],
+                tuple[ShapeType, StrideType, int],
+            ] = {}
+        cache = (id(self), repr(key))
+        if cache in self._cached_sizes_strides_offsets:
+            return self._cached_sizes_strides_offsets[cache]
+        axis: int = 0
+        sizes: list[int] = []
+        strides: list[int] = []
+        storage_offset: int = self._storage_offset
+        for dimension in key:
+            if axis >= len(self._shape) and dimension is not None:
+                raise IndexError("Too many indices for tensor")
+            axissize = self._shape[axis] if axis < len(self._shape) else None
+            if isinstance(dimension, int) and axissize is not None:
+                if not (-axissize <= dimension < axissize):
+                    raise IndexError(
+                        f"Index {dimension} of tensor is out of bounds for "
+                        f"dimension {axis}"
+                    )
+                dimension = (
+                    dimension + axissize if dimension < 0 else dimension
+                )
+                storage_offset += (
+                    dimension * self._strides[axis] // self.itemsize
+                )
+                axis += 1
+            elif isinstance(dimension, slice) and axissize is not None:
+                start, stop, step = dimension.indices(axissize)
+                sizes.append(-(-(stop - start) // step) if step != 0 else 0)
+                strides.append(step * self._strides[axis])
+                storage_offset += start * self._strides[axis] // self.itemsize
+                axis += 1
+            elif dimension is None:
+                sizes.append(1)
+                strides.append(0)
+            else:
+                raise TypeError(
+                    f"Invalid index type: {type(dimension).__name__!r}"
+                )
+        sizes.extend(self._shape[axis:])
+        strides.extend(self._strides[axis:])
+        strided = (tuple(sizes), tuple(strides), storage_offset)
+        self._cached_sizes_strides_offsets[cache] = strided
+        return strided
 
     def __add__(self, other: Number | Tensor) -> Tensor:
         """Perform element-wise addition of the tensor with a scalar or
@@ -840,16 +1171,16 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self.shape, bool)
+        new_tensor = Tensor(self._shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = (x < other for x in self.storage)
         elif isinstance(other, Tensor):
-            if self.shape != other.shape:
+            if self._shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
+                    f"{self._shape} {other.shape}"
                 )
-            new_tensor[:] = (x < y for x, y in zip(self._flat, other._flat))
+            new_tensor[:] = (x < y for x, y in zip(self, other))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for <: {type(self).__name__!r} "
@@ -873,16 +1204,16 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self.shape, bool)
+        new_tensor = Tensor(self._shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = (x > other for x in self.storage)
         elif isinstance(other, Tensor):
-            if self.shape != other.shape:
+            if self._shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
+                    f"{self._shape} {other.shape}"
                 )
-            new_tensor[:] = (x > y for x, y in zip(self._flat, other._flat))
+            new_tensor[:] = (x > y for x, y in zip(self, other))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for >: {type(self).__name__!r} "
@@ -906,16 +1237,16 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self.shape, bool)
+        new_tensor = Tensor(self._shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = (x <= other for x in self.storage)
         elif isinstance(other, Tensor):
-            if self.shape != other.shape:
+            if self._shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
+                    f"{self._shape} {other.shape}"
                 )
-            new_tensor[:] = (x <= y for x, y in zip(self._flat, other._flat))
+            new_tensor[:] = (x <= y for x, y in zip(self, other))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for <=: {type(self).__name__!r} "
@@ -939,22 +1270,221 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self.shape, bool)
+        new_tensor = Tensor(self._shape, bool)
         if isinstance(other, Number):
             new_tensor[:] = (x >= other for x in self.storage)
         elif isinstance(other, Tensor):
-            if self.shape != other.shape:
+            if self._shape != other.shape:
                 raise ValueError(
                     "Operands couldn't broadcast together with shapes "
-                    f"{self.shape} {other.shape}"
+                    f"{self._shape} {other.shape}"
                 )
-            new_tensor[:] = (x >= y for x, y in zip(self._flat, other._flat))
+            new_tensor[:] = (x >= y for x, y in zip(self, other))
         else:
             raise TypeError(
                 f"Unsupported operand type(s) for >=: {type(self).__name__!r} "
                 f"and {type(other).__name__!r}"
             )
         return new_tensor
+
+    def set_(
+        self,
+        source: t.Any,
+        storage_offset: int,
+        size: ShapeType,
+        strides: StrideType,
+        index: int = 0,
+    ) -> int:
+        """Sets the underlying storage, size, and strides."""
+        if len(size) == 1:
+            offset = strides[0] // self.itemsize
+            for dimension in range(size[0]):
+                element = source[index + dimension]
+                self.storage[storage_offset + dimension * offset] = element
+            return index + size[0]
+        else:
+            stride = strides[0] // self.itemsize
+            for dimension in range(size[0]):
+                index = self.set_(
+                    source,
+                    storage_offset + dimension * stride,
+                    size[1:],
+                    strides[1:],
+                    index,
+                )
+            return index
+
+    def broadcast_to(self, size: Size) -> Tensor:
+        """Broadcast the tensor to the target shape."""
+        shape = self._shape
+        if shape == size:
+            return self
+        inner = len(shape)
+        outer = len(size)
+        if outer < inner or (outer - inner < 0):
+            raise ValueError(f"Cannot broadcast {shape} to {size}")
+        padded = (1,) * (outer - inner) + shape
+        for dimension, (input, target) in enumerate(zip(padded, size)):
+            if input != target and input != 1:
+                raise ValueError(
+                    f"Cannot broadcast {shape} to {size} at dimension "
+                    f"{dimension}"
+                )
+        storage = []
+        for index in pdt(*(range(dim) for dim in size)):
+            indices = tuple(0 if p == 1 else j for j, p in zip(index, padded))
+            storage_offset = sum(
+                bdx * sdx for bdx, sdx in zip(indices, self.stride())
+            )
+            storage.append(self.storage[storage_offset])
+        new_tensor = Tensor(size, self.dtype, requires_grad=self.requires_grad)
+        new_tensor.storage = storage
+        return new_tensor
+
+    def backward(
+        self,
+        gradient: None | Tensor = None,
+        inputs: None | tuple[Tensor, ...] = None,
+        retain_graph: py_impl_bool = False,
+    ) -> None:
+        """Compute the gradient of current tensor w.r.t graph leaves.
+
+        :param gradient: The gradient of the output with respect to the
+            tensor, defaults to `None`.
+        :param inputs: Tuple of inputs w.r.t which the gradients will
+            be accumulated into `.grad`.
+        :param retain_graph: Whether to retain the computation graph
+            after backward.
+        :raises RuntimeError: If the tensor does not require gradients.
+        """
+        if not self.requires_grad:
+            raise RuntimeError(
+                "Tensors does not require grad and does not have a grad_fn"
+            )
+        graph: list[tuple[Tensor, ...] | Tensor] = []
+        seen: set[tuple[Tensor, ...] | Tensor] = set()
+        if gradient is None:
+            gradient = Tensor(1, float32)
+            gradient[:] = 1.0
+        self.grad = gradient
+
+        def iter_graph(inputs: tuple[Tensor, ...] | Tensor) -> None:
+            """Recursive function to traverse the computation graph."""
+            if isinstance(inputs, Tensor) and inputs not in seen:
+                seen.add(inputs)
+                if hasattr(inputs.grad_fn, "inputs"):
+                    for input in inputs.grad_fn.inputs:
+                        iter_graph(input)
+                graph.append(inputs)
+
+        iter_graph(inputs if inputs else self)
+        for node in reversed(graph):
+            if node.grad_fn is not None and callable(node.grad_fn):
+                node.grad_fn()
+        self.grad = None
+        if not retain_graph:
+            self.grad_fn = None
+
+    def render(self, show_dtype: py_impl_bool = False) -> None:
+        """Render the backward computation graph of the tensor as an
+        ASCII tree.
+
+        This method recursively traverses the autograd graph in
+        post-order, assigns a unique identifier to each node, and prints
+        out an aligned, human-readable tree with tensor's metadata and
+        nodes.
+
+        Leaf tensors are denoted explicitly, and previously visited
+        nodes are marked to indicate reuse in shared computation paths.
+
+        :param show_dtype: Flag to display dtype, defaults to `False`.
+
+        .. note::
+
+            - Nodes are uniquely numbered using post-order traversal,
+              ensuring a consistent inside-out visual structure.
+        """
+        seen: set[int] = set()
+        shown: set[int] = set()
+        counter: list[int] = [1]
+        tensors: OrderedDict[int, list[int]] = OrderedDict()
+
+        def set_id(input: Tensor) -> None:
+            """Set unique ID to each node using post-order traversal."""
+            if input is None or id(input) in seen:
+                return
+            seen.add(id(input))
+            if (
+                hasattr(input, "grad_fn")
+                and input.grad_fn
+                and hasattr(input.grad_fn, "inputs")
+            ):
+                for _input in input.grad_fn.inputs:
+                    set_id(_input)
+            tensors[id(input)] = counter[0]
+            counter[0] += 1
+
+        set_id(self)
+
+        def get_id(input: Tensor) -> t.Any:
+            """Return ID for a tensor, or -1 if unregistered."""
+            return tensors.get(id(input), -1)
+
+        def is_leaf(input: Tensor) -> py_impl_bool:
+            """Determine if a tensor is a leaf in the autograd graph."""
+            return not (
+                hasattr(input, "grad_fn")
+                and input.grad_fn
+                and hasattr(input.grad_fn, "inputs")
+                and input.grad_fn.inputs
+            )
+
+        def iter_graph(
+            input: Tensor,
+            indent: str = "",
+            is_last: py_impl_bool = True,
+            is_root: py_impl_bool = True,
+        ) -> None:
+            """
+            Recursively render the computation graph as an ASCII tree.
+
+            :param input: Tensor for which the backward graph is to be
+                visualised.
+            :param indent: indent string used for indentation and
+                continuation lines, defaults to ``.
+            :param is_last: Flag indicating whether this node is the
+                last among its siblings, defaults to `True`.
+            :param is_root: Flag indicating if this node is the root of
+                the tree, defaults to `True`.
+            """
+            if input is None:
+                return
+            branch = "└──► " if is_last or is_leaf(input) else "├──► "
+            if not is_last and get_id(input) == 1:
+                branch = "├──► "
+            prefix = indent + branch
+            if is_root:
+                prefix = ""
+            dtype = f", dtype={input.dtype}" if show_dtype else ""
+            shape = getattr(input, "_shape", "?")
+            label = f"Tensor.{get_id(input)}(shape={shape}{dtype})"
+            if id(input) in shown:
+                print(prefix + label + " [already seen]")
+                return
+            else:
+                print(prefix + label)
+            shown.add(id(input))
+            if not is_leaf(input):
+                outer = indent + ("     " if is_last else "│    ")
+                print(outer + f"{input.grad_fn.name()}")
+                inputs = input.grad_fn.inputs
+                for idx, _input in enumerate(inputs):
+                    is_last_input = idx == len(inputs) - 1
+                    inner = indent + ("     " if is_last else "│    ")
+                    iter_graph(_input, inner, is_last_input, is_root=False)
+
+        iter_graph(self)
+        print()
 
     @property
     def buffer(self) -> t.Any:
@@ -988,7 +1518,7 @@ class Tensor:
 
     def dim(self) -> int:
         """Return the number of dimensions of the tensor."""
-        return len(self.shape)
+        return len(self._shape)
 
     ndim = property(dim)
 
@@ -999,7 +1529,7 @@ class Tensor:
 
     def element_size(self) -> int:
         """Return the size, in bytes, of each tensor element."""
-        return self._itemsize
+        return py_impl_int(self._itemsize)
 
     itemsize = property(element_size)
 
@@ -1011,17 +1541,19 @@ class Tensor:
     @shape.setter
     def shape(self, value: Size) -> None:
         """Set a new shape for the tensor."""
-        if value == self.shape:
+        if value == self._shape:
             return
-        if self.nelement() != calculate_size(value):
+        if self.nelement() != numel(value):
             raise ValueError("New shape is incompatible with the current size")
         if get_step(self) == 1:
             self._shape = value
-            self._strides = calculate_strides(self._shape, self.itemsize)
+            self._strides = make_contiguous_strides(self._shape, self.itemsize)
             return
-        shape = [dim for dim in self.shape if dim > 1]
+        shape = [dim for dim in self._shape if dim > 1]
         strides = [
-            stride for dim, stride in zip(self.shape, self._strides) if dim > 1
+            stride
+            for dim, stride in zip(self._shape, self._strides)
+            if dim > 1
         ]
         new_shape = [dim for dim in value if dim > 1]
         if new_shape != shape:
@@ -1045,36 +1577,6 @@ class Tensor:
         self._shape = value
         self._strides = tuple(reversed(new_strides))
 
-    @property
-    def _flat(self) -> t.Generator[Number]:
-        """Flatten the tensor and yield its elements one by one.
-
-        This property allows you to iterate over all elements in the
-        tensor, regardless of its shape or dimensionality, in a flattened
-        order. It yields the elements one by one, similar to Python's
-        built-in `iter()` function, and handles both contiguous and
-        non-contiguous memory layouts.
-
-        :yield: The elements of the tensor in row-major (C-style)
-            order.
-        """
-        sub_tensors = [self]
-        while sub_tensors:
-            sub_tensor = sub_tensors.pop(0)
-            step_size = get_step(sub_tensor)
-            if step_size:
-                for dim in self.storage[
-                    slice(
-                        sub_tensor._offset,
-                        sub_tensor._offset + sub_tensor.nelement() * step_size,
-                        step_size,
-                    )
-                ]:
-                    yield dim
-            else:
-                for dim in range(sub_tensor.shape[0]):
-                    sub_tensors.append(sub_tensor[dim])
-
     def flat(self) -> list[Number]:
         """Flatten the tensor and return all its elements in a list.
 
@@ -1086,37 +1588,21 @@ class Tensor:
 
         :return: A list containing all elements in the tensor.
         """
-        array_like: list[Number] = []
-        sub_tensors = [self]
-        while sub_tensors:
-            sub_tensor = sub_tensors.pop(0)
-            step_size = get_step(sub_tensor)
-            if step_size:
-                array_like += self.storage[
-                    slice(
-                        sub_tensor._offset,
-                        sub_tensor._offset + sub_tensor.nelement() * step_size,
-                        step_size,
-                    )
-                ]
-            else:
-                for dim in range(sub_tensor.shape[0]):
-                    sub_tensors.append(sub_tensor[dim])
-        return array_like
+        return list(self)
 
     def nelement(self) -> int:
         """Return total number of elements in a tensor."""
-        return calculate_size(self.shape)
+        return numel(self._shape)
 
     numel = nelement
 
-    def size(self, dim: None | int = None) -> Size | tuple[int, ...] | int:
+    def size(self, dim: None | int = None) -> ShapeType | int:
         """Returns the size of the tensor."""
         if dim is not None:
-            return self.shape[dim]
-        return Size(self.shape)
+            return self._shape[dim]
+        return Size(self._shape)
 
-    def stride(self) -> tuple[int, ...]:
+    def stride(self) -> StrideType:
         """Return the strides for traversing the tensor dimensions."""
         return tuple(idx // self.itemsize for idx in self._strides)
 
@@ -1137,10 +1623,10 @@ class Tensor:
                 requested data type is the same as the original.
         """
         new_tensor = Tensor(
-            self.shape,
-            dtype,
-            self.device,
-            self.requires_grad,
+            shape=self.shape,
+            dtype=dtype,
+            device=self.device,
+            requires_grad=self.requires_grad,
         )
         new_tensor[:] = self
         return new_tensor
@@ -1163,7 +1649,7 @@ class Tensor:
         """Return tensor with bool dtype."""
         return self.to(bool)
 
-    def _view(self) -> None | Tensor:
+    def _view(self) -> Tensor:
         """Create a new view of the tensor.
 
         This method allows creating a new tensor view. The method
@@ -1174,34 +1660,21 @@ class Tensor:
 
         :return: A new tensor view with the specified dtype. Returns
             `None` if the view cannot be created.
-        :raises ValueError: If the tensor is multidimensional.
+        :raises RuntimeError: If the tensor is a scalar.
         """
-        if self.ndim == 1:
-            itemsize = self.dtype.itemsize
-            size = self.nbytes // itemsize
-            offset = (self._offset * self.itemsize) // itemsize
-            return Tensor(
-                size,
-                self.dtype,
-                self.device,
-                self.requires_grad,
-                buffer=self,
-                offset=offset,
-            )
-        elif self.ndim > 1:
-            return Tensor(
-                self.shape,
-                self.dtype,
-                self.device,
-                self.requires_grad,
-                buffer=self,
-                offset=self._offset,
-                strides=self._strides,
-            )
-        else:
-            raise ValueError("Tensors can only be viewed with the same dtype")
+        if self.ndim == 0:
+            raise RuntimeError("cannot create a view of a scalar")
+        return Tensor(
+            shape=self._shape,
+            dtype=self.dtype,
+            device=self.device,
+            requires_grad=self.requires_grad,
+            storage=self,
+            offset=self._storage_offset,
+            strides=self._strides,
+        )
 
-    def view(self, *size: builtins.int) -> Tensor:
+    def view(self, *shape: py_impl_int) -> Tensor:
         """Return a new view of the tensor with the specified shape.
 
         This method attempts to reshape the tensor while keeping the
@@ -1209,25 +1682,37 @@ class Tensor:
         current memory layout, a copy of the data is made to achieve the
         desired shape.
 
-        :param size: The desired shape for the tensor, defaults to -1.
+        :param shape: The desired shape for the tensor.
         :return: A reshaped view of the tensor if possible; otherwise, a
             reshaped copy.
         """
-        if len(size) == 1 and size[0] == -1:
-            new_tensor = Tensor(self.nelement(), self.dtype)
-            new_tensor[:] = self
-            return new_tensor
+        if len(shape) == 1 and isinstance(shape[0], Iterable):
+            shape = tuple(shape[0])
+        else:
+            shape = tuple(shape)
+        if shape.count(-1) > 1:
+            raise RuntimeError("only one dimension can be inferred")
+        nelement = self.nelement()
+        possible = numel([dim for dim in shape if dim != -1])
+        if -1 in shape:
+            if possible == 0 or nelement % possible != 0:
+                raise RuntimeError(
+                    f"shape '{shape}' is invalid for input of size {nelement}"
+                )
+            index = shape.index(-1)
+            dimension = nelement // possible
+            shape = shape[:index] + (dimension,) + shape[index + 1 :]
+        if numel(shape) != nelement:
+            raise RuntimeError(
+                f"shape '{shape}' is invalid for input of size {nelement}"
+            )
         new_tensor = self._view()
-        try:
-            new_tensor.shape = size
-        except AttributeError:
-            new_tensor = self.clone()
-            new_tensor.shape = size
+        new_tensor.shape = shape
         return new_tensor
 
     reshape = view
 
-    def tolist(self) -> list[Number]:
+    def tolist(self) -> t.Any:
         """Convert the tensor to a nested Python list.
 
         This method recursively iterates over the dimensions of the
@@ -1237,69 +1722,21 @@ class Tensor:
         :return: A nested Python list representation of the tensor's
             data.
         """
-        comprehensions = 0
-        shape = list(self.shape).copy()
-        comprehension = list(self.storage).copy()
-        skip = self.nelement() // shape[-1]
-        while comprehensions < len(self.shape) - 1:
-            comprehension = [
-                comprehension[idx * shape[-1] : idx * shape[-1] + shape[-1]]
-                for idx in range(skip)
+        if self.ndim == 0:
+            return self.item()
+
+        def flatten(prefix: t.Any = ()) -> t.Any:
+            dimensions = len(prefix)
+            return [
+                (
+                    flatten(prefix + (index,))
+                    if dimensions + 1 < self.ndim
+                    else self[prefix + (index,)].item()
+                )
+                for index in range(self._shape[dimensions])
             ]
-            shape.pop()
-            skip = len(comprehension) // shape[-1]
-            comprehensions += 1
-        return comprehension
 
-    def clamp(
-        self,
-        min: Number | Tensor,
-        max: Number | Tensor,
-        out: None | Tensor = None,
-    ) -> Tensor:
-        """Clamp (limit) the values in the tensor.
-
-        Given an input tensor, this method returns a tensor where values
-        are limited to a specified range. All values less than `min`
-        are set to `min`, and all values greater than `max` are set
-        to `max`.
-
-        :param min: Minimum value to clamp to. Can be a scalar or a
-            tensor.
-        :param max: Maximum value to clamp to. Can be a scalar or a
-            tensor.
-        :param out: Optional output tensor to store the result, defaults
-            to `None`.
-        :return: A new tensor with values clamped to the specified range.
-        :raises TypeError: If either `min` or `max` are not either
-            of type `int`, `float` or `tensor`.
-        :raises ValueError: If output shape doesn't match as the input
-            tensor.
-        """
-        if not isinstance(min, (Number, Tensor)):
-            raise TypeError("min must be a scalar or a tensor")
-        if not isinstance(max, (Number, Tensor)):
-            raise TypeError("max must be a scalar or a tensor")
-        if isinstance(min, Tensor) and min.shape != self.shape:
-            raise ValueError("min must have same shape as the input tensor")
-        if isinstance(max, Tensor) and max.shape != self.shape:
-            raise ValueError("max must have same shape as the input tensor")
-        if out is None:
-            out = Tensor(self.shape, self.dtype)
-        F = self.flat()
-        R = range(len(F))
-        if isinstance(min, Tensor) and isinstance(max, Tensor):
-            L = (py_min(max._flat[_], py_max(min._flat[_], F[_])) for _ in R)
-        elif isinstance(min, Tensor):
-            L = (py_min(max, py_max(min._flat[_], F[_])) for _ in R)
-        elif isinstance(max, Tensor):
-            L = (py_min(max._flat[_], py_max(min, F[_])) for _ in R)
-        else:
-            L = (py_min(max, py_max(min, _)) for _ in F)
-        out[:] = L
-        return out
-
-    clip = clamp
+        return flatten()
 
     def item(self) -> t.Any:
         """Return standard scalar Python object for tensor object."""
@@ -1317,11 +1754,7 @@ class Tensor:
 
     flatten = ravel
 
-    def view_(
-        self,
-        shape: Size | tuple[builtins.int, ...],
-        strides: Size | tuple[builtins.int, ...],
-    ) -> Tensor:
+    def as_strided(self, size: ShapeType, strides: StrideType) -> Tensor:
         """Create a new view of the tensor with the specified shape and
         strides.
 
@@ -1331,17 +1764,19 @@ class Tensor:
         """
         new_tensor = self.__class__.__new__(self.__class__)
         new_tensor._base = self._base
-        new_tensor.storage = self.storage
         new_tensor._dtype = self._dtype
         new_tensor._itemsize = self._itemsize
-        new_tensor._offset = self._offset
-        new_tensor._shape = shape
+        new_tensor._shape = size
+        new_tensor._storage_offset = self._storage_offset
         new_tensor._strides = strides
         new_tensor.device = self.device
+        new_tensor.grad = self.grad
+        new_tensor.grad_fn = self.grad_fn
         new_tensor.requires_grad = self.requires_grad
+        new_tensor.storage = self.storage
         return new_tensor
 
-    def transpose(self, dim0: builtins.int, dim1: builtins.int) -> Tensor:
+    def transpose(self, dim0: py_impl_int, dim1: py_impl_int) -> Tensor:
         """Transpose the tensor by permuting its dimensions.
 
         This method returns a view of the tensor with its dimensions
@@ -1360,26 +1795,25 @@ class Tensor:
         """Transpose dimensions 0 and 1."""
         return self.transpose(0, 1)
 
-    @property
-    def T(self) -> Tensor:
-        """Alias for self.t()."""
-        return self.t()
+    T = property(t)
 
-    def unique(self, sorted: builtins.bool = True) -> Tensor:
+    def unique(self, sorted: py_impl_bool = True) -> Tensor:
         """Return unique elements from the tensor.
 
         :param sorted: Whether to sort the unique elements before
             returning the output, defaults to `True`.
         :return: Tensor with list of unique elements.
         """
-        size = len((unique := set(self.storage)))
+        storage = list(self)
+        unique = set(storage)
+        values = py_impl_sorted(unique) if sorted else storage
         new_tensor = Tensor(
-            (size,),
-            self.dtype,
-            self.device,
-            self.requires_grad,
+            shape=len(values),
+            dtype=self.dtype,
+            device=self.device,
+            requires_grad=self.requires_grad,
         )
-        new_tensor[:] = py_sorted(unique) if sorted else unique
+        new_tensor[:] = values
         return new_tensor
 
     def neg(self) -> Tensor:
@@ -1413,7 +1847,7 @@ class Tensor:
         self[:] = value
         return self
 
-    def unsqueeze(self, dim: builtins.int) -> Tensor:
+    def unsqueeze(self, dim: py_impl_int) -> Tensor:
         """Return a new tensor with a singleton dimension inserted at
         the specified position.
 
@@ -1427,9 +1861,9 @@ class Tensor:
         if not (0 <= dim <= self.ndim):
             raise ValueError(
                 f"Dimension {dim} out of range for tensor of shape "
-                f"{self.shape} with {self.ndim} dimensions"
+                f"{self._shape} with {self.ndim} dimensions"
             )
-        shape = self.shape[:dim] + (1,) + self.shape[dim:]
+        shape = self._shape[:dim] + (1,) + self._shape[dim:]
         new_tensor = Tensor(
             shape,
             dtype=self.dtype,
@@ -1516,150 +1950,19 @@ class Tensor:
     less_equal = le = __le__
     greater_equal = ge = __ge__
 
-    def backward(
-        self,
-        gradient: None | Tensor = None,
-        inputs: None | tuple[Tensor, ...] = None,
-    ) -> None:
-        """Compute the gradient of current tensor w.r.t graph leaves.
-
-        :param gradient: The gradient of the output with respect to the
-            tensor, defaults to `None`.
-        :param inputs: Tuple of inputs w.r.t which the gradients will
-            be accumulated into `.grad`.
-        :raises RuntimeError: If the tensor does not require gradients.
-        """
-        if not self.requires_grad:
-            raise RuntimeError(
-                "Tensors does not require grad and does not have a grad_fn"
-            )
-        graph: list[tuple[Tensor, ...] | Tensor] = []
-        seen: set[tuple[Tensor, ...] | Tensor] = set()
-        if gradient is None:
-            gradient = Tensor(1, float32)
-            gradient[:] = 1.0
-        self.grad = gradient
-
-        def iter_graph(inputs: tuple[Tensor, ...] | Tensor) -> None:
-            """Recursive function to traverse the computation graph."""
-            if isinstance(inputs, Tensor) and inputs not in seen:
-                seen.add(inputs)
-                if hasattr(inputs.grad_fn, "inputs"):
-                    for input in inputs.grad_fn.inputs:
-                        iter_graph(input)
-                graph.append(inputs)
-
-        iter_graph(inputs if inputs else self)
-        for node in reversed(graph):
-            if node.grad_fn is not None and callable(node.grad_fn):
-                node.grad_fn()
-        self.grad = None
-
-    def render(self, show_dtype: builtins.bool = False) -> None:
-        """Render the backward computation graph of the tensor as an
-        ASCII tree.
-
-        This method recursively traverses the autograd graph in
-        post-order, assigns a unique identifier to each node, and prints
-        out an aligned, human-readable tree with tensor's metadata and
-        nodes.
-
-        Leaf tensors are denoted explicitly, and previously visited
-        nodes are marked to indicate reuse in shared computation paths.
-
-        :param show_dtype: Flag to display dtype, defaults to `False`.
-
-        .. note::
-
-            - Nodes are uniquely numbered using post-order traversal,
-              ensuring a consistent inside-out visual structure.
-        """
-        seen: set[int] = set()
-        shown: set[int] = set()
-        counter: list[int] = [1]
-        tensors: OrderedDict[int, list[int]] = OrderedDict()
-
-        def set_id(input: Tensor) -> None:
-            """Set unique ID to each node using post-order traversal."""
-            if input is None or id(input) in seen:
-                return
-            seen.add(id(input))
-            if (
-                hasattr(input, "grad_fn")
-                and input.grad_fn
-                and hasattr(input.grad_fn, "inputs")
-            ):
-                for _input in input.grad_fn.inputs:
-                    set_id(_input)
-            tensors[id(input)] = counter[0]
-            counter[0] += 1
-
-        set_id(self)
-
-        def get_id(input: Tensor) -> t.Any:
-            """Return ID for a tensor, or -1 if unregistered."""
-            return tensors.get(id(input), -1)
-
-        def is_leaf(input: Tensor) -> builtins.bool:
-            """Determine if a tensor is a leaf in the autograd graph."""
-            return not (
-                hasattr(input, "grad_fn")
-                and input.grad_fn
-                and hasattr(input.grad_fn, "inputs")
-                and input.grad_fn.inputs
-            )
-
-        def iter_graph(
-            input: Tensor,
-            indent: str = "",
-            is_last: builtins.bool = True,
-            is_root: builtins.bool = True,
-        ) -> None:
-            """
-            Recursively render the computation graph as an ASCII tree.
-
-            :param input: Tensor for which the backward graph is to be
-                visualised.
-            :param indent: indent string used for indentation and
-                continuation lines, defaults to ``.
-            :param is_last: Flag indicating whether this node is the
-                last among its siblings, defaults to `True`.
-            :param is_root: Flag indicating if this node is the root of
-                the tree, defaults to `True`.
-            """
-            if input is None:
-                return
-            branch = "└──► " if is_last or is_leaf(input) else "├──► "
-            if not is_last and get_id(input) == 1:
-                branch = "├──► "
-            prefix = indent + branch
-            if is_root:
-                prefix = ""
-            dtype = f", dtype={input.dtype}" if show_dtype else ""
-            shape = getattr(input, "_shape", "?")
-            label = f"Tensor.{get_id(input)}(shape={shape}{dtype})"
-            if id(input) in shown:
-                print(prefix + label + " [already seen]")
-                return
-            else:
-                print(prefix + label)
-            shown.add(id(input))
-            if not is_leaf(input):
-                outer = indent + ("     " if is_last else "│    ")
-                print(outer + f"{input.grad_fn.name()}")
-                inputs = input.grad_fn.inputs
-                for idx, _input in enumerate(inputs):
-                    is_last_input = idx == len(inputs) - 1
-                    inner = indent + ("     " if is_last else "│    ")
-                    iter_graph(_input, inner, is_last_input, is_root=False)
-
-        iter_graph(self)
-        print()
-
     def detach(self) -> Tensor:
         """Return a new tensor without requiring gradients."""
-        self.requires_grad = False
-        return self
+        new_tensor = Tensor(
+            shape=self._shape,
+            dtype=self._dtype,
+            device=self.device,
+            requires_grad=False,
+            storage=self.storage,
+            offset=self._storage_offset,
+            strides=self._strides,
+        )
+        new_tensor._base = self
+        return new_tensor
 
     def log(self) -> Tensor:
         """Return a new tensor with the natural log of the elements of
@@ -1694,8 +1997,8 @@ class Tensor:
 
     def sum(
         self,
-        dim: None | builtins.int = None,
-        keepdim: builtins.bool = False,
+        dim: None | py_impl_int = None,
+        keepdim: py_impl_bool = False,
     ) -> Tensor:
         """Compute the sum of elements in the tensor across a specified
         dimension.
@@ -1718,8 +2021,8 @@ class Tensor:
 
     def max(
         self,
-        dim: None | builtins.int = None,
-        keepdim: builtins.bool = False,
+        dim: None | py_impl_int = None,
+        keepdim: py_impl_bool = False,
     ) -> Tensor:
         """Return the maximum of elements in the tensor across a
         specified dimension.
@@ -1742,8 +2045,8 @@ class Tensor:
 
     def min(
         self,
-        dim: None | builtins.int = None,
-        keepdim: builtins.bool = False,
+        dim: None | py_impl_int = None,
+        keepdim: py_impl_bool = False,
     ) -> Tensor:
         """Return the minimum of elements in the tensor across a
         specified dimension.
@@ -1766,8 +2069,8 @@ class Tensor:
 
     def mean(
         self,
-        dim: None | builtins.int = None,
-        keepdim: builtins.bool = False,
+        dim: None | py_impl_int = None,
+        keepdim: py_impl_bool = False,
     ) -> Tensor:
         """Compute the mean of elements in the tensor across a specified
         dimension.
@@ -1790,8 +2093,8 @@ class Tensor:
 
     def std(
         self,
-        dim: None | builtins.int = None,
-        keepdim: builtins.bool = False,
+        dim: None | py_impl_int = None,
+        keepdim: py_impl_bool = False,
     ) -> Tensor:
         """Compute the standard deviation of elements in the tensor
         across a specified dimension.
@@ -1900,7 +2203,7 @@ class Tensor:
 
     def softmax(
         self,
-        dim: None | builtins.int = None,
+        dim: None | py_impl_int = None,
         dtype: None | Dtype = None,
     ) -> Tensor:
         """Apply the Softmax function element-wise.
@@ -1920,7 +2223,7 @@ class Tensor:
 
     def log_softmax(
         self,
-        dim: None | builtins.int = None,
+        dim: None | py_impl_int = None,
         dtype: None | Dtype = None,
     ) -> Tensor:
         """Apply the Softmax function followed by Logarithm.
@@ -1953,7 +2256,7 @@ def save(
 def load(
     f: FILE_LIKE,
     pickle_module: types.ModuleType = pickle,
-    weights_only: None | builtins.bool = None,
+    weights_only: None | py_impl_bool = None,
 ) -> t.Any:
     """Load an object saved from a file."""
     weights_only = weights_only
@@ -1963,7 +2266,7 @@ def load(
 
 
 @function_dispatch
-def typename(obj: t.Any) -> str:
+def typename(obj: t.Any) -> t.Any:
     """String representation of the type of an object.
 
     This function returns a fully qualified string representation of an
@@ -1986,3 +2289,27 @@ def typename(obj: t.Any) -> str:
     if module in {"", "builtins"}:
         return qualname
     return f"{module}.{qualname}"
+
+
+@function_dispatch
+def dtypecheck(dtype: None | t.Any) -> Dtype:
+    """Return a valid SlowTorch dtype based on the provided value.
+
+    :param dtype: A dtype-like object or Python primitive. If `None`,
+        defaults to `slowtorch.float32`.
+    :return: A canonical SlowTorch Dtype (`float32`, `int64`, or `bool`).
+    """
+    if dtype is None:
+        return slowtorch.float32
+    name = getattr(dtype, "name", None)
+    if isinstance(name, str):
+        if name.startswith("float"):
+            return slowtorch.float32
+        if name.startswith("int"):
+            return slowtorch.int64
+        return slowtorch.bool
+    if isinstance(dtype, float):
+        return slowtorch.float32
+    if isinstance(dtype, int):
+        return slowtorch.int64
+    return slowtorch.bool
