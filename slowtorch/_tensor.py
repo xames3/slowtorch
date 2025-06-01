@@ -74,9 +74,12 @@ from itertools import product as pdt
 
 import slowtorch
 from slowtorch import function_dispatch
-from slowtorch._types import FILE_LIKE
+from slowtorch._types import BoolLikeType
+from slowtorch._types import FileLike
+from slowtorch._types import FloatLikeType
 from slowtorch._types import IndexLike
-from slowtorch._types import Number
+from slowtorch._types import IntLikeType
+from slowtorch._types import Scalar
 from slowtorch._utils import set_module
 
 __all__: list[str] = [
@@ -108,7 +111,7 @@ py_impl_sum = builtins.sum
 class PrinterOptions:
     """Printer options to mimic PyTorch's way."""
 
-    precision: int = 4
+    precision: IntLikeType = 4
 
 
 @set_module("slowtorch")
@@ -131,7 +134,7 @@ class Device:
 
     __qualname__: str = "device"
 
-    def __init__(self, type: str = "cpu", index: int = 0) -> None:
+    def __init__(self, type: str = "cpu", index: IntLikeType = 0) -> None:
         """Initialise a new `Device` object with default index."""
         self.type = type
         self.index = index
@@ -172,7 +175,7 @@ class Dtype:
         name: str,
         short: str,
         data: t.Any,
-        value: Number,
+        value: Scalar,
         typename: str,
     ) -> None:
         """Initialise a new `Dtype` object with name and value."""
@@ -188,7 +191,7 @@ class Dtype:
 
 
 @function_dispatch
-class Size(tuple[int, ...]):
+class Size(tuple[IntLikeType, ...]):
     """Represent the shape of a tensor as a tuple of integers.
 
     This class extends the built-in tuple to provide a clear and
@@ -197,7 +200,7 @@ class Size(tuple[int, ...]):
     :param iterable: A tuple representing the dimensions of the tensor.
     """
 
-    def __init__(self, iterable: tuple[int, ...]) -> None:
+    def __init__(self, iterable: tuple[IntLikeType, ...]) -> None:
         """Initialise a `Size` instance with some iterable."""
         if not all(isinstance(dim, int) and dim >= 0 for dim in iterable):
             raise ValueError("Dimensions must be non-negative")
@@ -207,14 +210,15 @@ class Size(tuple[int, ...]):
         """Return a string representation of the `Size` object."""
         return f"slowtorch.{type(self).__qualname__}({list(self.iterable)})"
 
-    def numel(self) -> int:
+    def numel(self) -> IntLikeType:
         """Return total number of elements a tensor would contain."""
         return numel(self.iterable)
 
 
-DeviceType: t.TypeAlias = None | str | int | Device
-ShapeType: t.TypeAlias = Size | tuple[int, ...]
-StrideType: t.TypeAlias = list[int] | tuple[int, ...]
+DeviceType: t.TypeAlias = str | IntLikeType | Device
+ShapeType: t.TypeAlias = Size | tuple[IntLikeType, ...]
+StrideType: t.TypeAlias = list[IntLikeType] | tuple[IntLikeType, ...]
+Dim: t.TypeAlias = IntLikeType
 
 supported_dtypes: tuple[Dtype, ...] = (
     (bool := Dtype("bool", "b1", ctypes.c_bool, False, "BoolTensor")),
@@ -239,7 +243,7 @@ for dtype in supported_dtypes:
 
 
 @function_dispatch
-def set_printoptions(precision: None | int = None) -> None:
+def set_printoptions(precision: None | IntLikeType = None) -> None:
     """Set options for printing."""
     from slowtorch._tensor import Tensor
 
@@ -249,7 +253,7 @@ def set_printoptions(precision: None | int = None) -> None:
 
 
 @function_dispatch
-def infer_size_shapes(data: t.Any) -> Size:
+def infer_size_shapes(data: Input) -> Size:
     """Infer the shape of a nested iterable structure and represent it
     as a Tensor.
 
@@ -263,17 +267,17 @@ def infer_size_shapes(data: t.Any) -> Size:
     :return: A tuple of integers representing the shape of the input
         data.
     """
-    shape: list[int] = []
+    shape: ShapeType = []
 
-    def infer_size(a: t.Any, numel: int) -> None:
+    def infer_size(input: Input, numel: IntLikeType) -> None:
         """Helper function to calculate shape recursively."""
-        if isinstance(a, t.Sized) and not isinstance(a, (str, bytes)):
+        if isinstance(input, t.Sized) and not isinstance(input, (str, bytes)):
             if len(shape) <= numel:
                 shape.append(0)
-            length = len(a)
+            length = len(input)
             if length > shape[numel]:
                 shape[numel] = length
-            for element in a:
+            for element in input:
                 infer_size(element, numel + 1)
 
     infer_size(data, 0)
@@ -281,7 +285,7 @@ def infer_size_shapes(data: t.Any) -> Size:
 
 
 @function_dispatch
-def make_contiguous_strides(shape: ShapeType, itemsize: int) -> Size:
+def make_contiguous_strides(shape: ShapeType, itemsize: IntLikeType) -> Size:
     """Calculate memory strides for traversing a Tensor in row-major
     order.
 
@@ -306,8 +310,8 @@ def make_contiguous_strides(shape: ShapeType, itemsize: int) -> Size:
         [2] Row-major order ensures that the last dimension changes the
             fastest in memory.
     """
-    strides: list[int] = []
-    stride: int = itemsize
+    strides: StrideType = []
+    stride: IntLikeType = itemsize
     for dim in reversed(shape):
         strides.append(stride)
         stride *= dim
@@ -315,7 +319,7 @@ def make_contiguous_strides(shape: ShapeType, itemsize: int) -> Size:
 
 
 @function_dispatch
-def numel(shape: t.Sequence[int] | int) -> int:
+def numel(shape: t.Sequence[IntLikeType] | IntLikeType) -> IntLikeType:
     """Calculate the total number of elements in a Tensor based on its
     shape.
 
@@ -334,7 +338,7 @@ def numel(shape: t.Sequence[int] | int) -> int:
 
 
 @function_dispatch
-def get_step(view: Tensor) -> int:
+def get_step(view: Tensor) -> IntLikeType:
     """Calculate the step size for traversing a Tensor along its last
     dimension.
 
@@ -355,7 +359,7 @@ def get_step(view: Tensor) -> int:
 
 
 @function_dispatch
-def check_same_shape(args: Tensor) -> py_impl_bool:
+def check_same_shape(args: Tensor) -> BoolLikeType:
     """Check if a nested iterable structure can form a Tensor with a
     uniform shape.
 
@@ -394,7 +398,7 @@ def broadcast_shapes(input: Size, other: Size) -> ShapeType:
     :return: The broadcast-compatible shape.
     :raises ValueError: If the shapes are incompatible for broadcasting.
     """
-    buffer: list[int] = []
+    shape: ShapeType = []
     r_input = list(reversed(input))
     r_other = list(reversed(other))
     maximum = max(len(r_input), len(r_other))
@@ -402,17 +406,17 @@ def broadcast_shapes(input: Size, other: Size) -> ShapeType:
     r_other.extend([1] * (maximum - len(r_other)))
     for idx, jdx in zip(r_input, r_other):
         if idx == jdx or idx == 1 or jdx == 1:
-            buffer.append(max(idx, jdx))
+            shape.append(max(idx, jdx))
         else:
             raise ValueError(
                 f"Operands couldn't broadcast together with shapes {input} "
                 f"and {other}"
             )
-    return tuple(reversed(buffer))
+    return tuple(reversed(shape))
 
 
 def unravel_index(
-    indices: int,
+    indices: IntLikeType,
     shape: ShapeType,
 ) -> ShapeType:
     """Convert a tensor of flat indices into a multi-dimensional
@@ -422,7 +426,7 @@ def unravel_index(
     :param shape: The shape of the tensor.
     :return: A tuple representing the multi-dimensional index.
     """
-    size: list[int] = []
+    size: ShapeType = []
     for dim in reversed(shape):
         size.append(indices % dim)
         indices = indices // dim
@@ -496,29 +500,29 @@ class Tensor:
 
     _print_opts = PRINT_OPTS
     __slots__ = (
-        "_shape",
+        "_base",
+        "_cached_sizes_strides_offsets",
         "_dtype",
         "_itemsize",
-        "_strides",
+        "_shape",
         "_storage_offset",
-        "storage",
-        "_base",
-        "device",
-        "requires_grad",
-        "grad_fn",
-        "grad",
+        "_strides",
         "data",
-        "_cached_sizes_strides_offsets",
+        "device",
+        "grad",
+        "grad_fn",
+        "requires_grad",
+        "storage",
     )
 
     def __init__(
         self,
-        shape: ShapeType | int,
+        shape: ShapeType | IntLikeType,
         dtype: None | Dtype = float32,
-        device: DeviceType = None,
-        requires_grad: py_impl_bool = False,
+        device: None | DeviceType = None,
+        requires_grad: BoolLikeType = False,
         storage: None | str | ctypes._CData | Tensor = None,
-        offset: int = 0,
+        offset: IntLikeType = 0,
         strides: None | StrideType = None,
     ) -> None:
         """Initialise a `tensor` object from provided shape."""
@@ -530,7 +534,7 @@ class Tensor:
         self.requires_grad = requires_grad
         if not isinstance(shape, Iterable):
             shape = (shape,)
-        self._shape = tuple(int(dim) for dim in shape)
+        self._shape = tuple(py_impl_int(dim) for dim in shape)
         if dtype is None:
             dtype = float32
         elif isinstance(dtype, type):
@@ -563,7 +567,7 @@ class Tensor:
                 strides = make_contiguous_strides(self._shape, self._itemsize)
             elif not (
                 isinstance(strides, tuple)
-                and all(isinstance(stride, int) for stride in strides)
+                and all(isinstance(stride, py_impl_int) for stride in strides)
                 and len(strides) == len(self._shape)
             ):
                 raise ValueError("Invalid strides provided")
@@ -585,12 +589,12 @@ class Tensor:
     def format_repr(
         self,
         formatted: str,
-        dimension: int,
-        storage_offset: int,
-        padding: int = 0,
-        whitespace: int = 0,
-        is_scalar: py_impl_bool = False,
-        precision: int = 4,
+        dimension: IntLikeType,
+        storage_offset: IntLikeType,
+        padding: IntLikeType = 0,
+        whitespace: IntLikeType = 0,
+        is_scalar: BoolLikeType = False,
+        precision: IntLikeType = 4,
     ) -> str:
         """Method to mimic PyTorch's tensor as close as possible."""
         if is_scalar:
@@ -675,7 +679,7 @@ class Tensor:
             return f"tensor({formatted}, dtype={self.dtype}{extra_repr})"
         return f"tensor({formatted}{extra_repr})"
 
-    def __float__(self) -> float:
+    def __float__(self) -> FloatLikeType:
         """Convert the tensor to a scalar float if it has exactly one
         element.
 
@@ -690,7 +694,7 @@ class Tensor:
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __int__(self) -> py_impl_int:
+    def __int__(self) -> IntLikeType:
         """Convert the tensor to a scalar int if it has exactly one
         element.
 
@@ -705,7 +709,7 @@ class Tensor:
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __bool__(self) -> py_impl_bool:
+    def __bool__(self) -> BoolLikeType:
         """Convert the tensor to a scalar bool if it has exactly one
         element.
 
@@ -720,7 +724,7 @@ class Tensor:
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
-    def __len__(self) -> int:
+    def __len__(self) -> IntLikeType:
         """Return the size of the first dimension of the tensor.
 
         This implements the behavior of `len()` for the tensor object,
@@ -733,7 +737,7 @@ class Tensor:
             raise IndexError("Tensor has no dimensions")
         return self._shape[0]
 
-    def __iter__(self) -> t.Generator[Number]:
+    def __iter__(self) -> t.Generator[Scalar]:
         """Flatten the tensor and yield its elements one by one.
 
         This property allows you to iterate over all elements in the
@@ -809,7 +813,11 @@ class Tensor:
             indices += (slice(None),) * (len(self._shape) - len(indices))
         if any(isinstance(kdx, py_impl_bool) for kdx in indices):
             indices = tuple(
-                int(index) if isinstance(index, py_impl_bool) else index
+                (
+                    py_impl_int(index)
+                    if isinstance(index, py_impl_bool)
+                    else index
+                )
                 for index in indices
             )
         size, strides, storage_offset = (
@@ -860,7 +868,7 @@ class Tensor:
         if not size:
             self.storage[storage_offset] = value
             return
-        if isinstance(value, Number):
+        if isinstance(value, Scalar):
             source = [value] * nelement
         elif isinstance(value, Iterable) and not isinstance(value, Tensor):
             source = list(value)
@@ -875,7 +883,7 @@ class Tensor:
             source = list(value)
         if nelement != len(source):
             raise ValueError(
-                "Number of elements in the value doesn't match the size"
+                "Scalar of elements in the value doesn't match the size"
             )
         current_offset = 1
         for stride in reversed(strides):
@@ -904,7 +912,7 @@ class Tensor:
     def compute_sizes_strides_storage_offset(
         self,
         key: IndexLike,
-    ) -> tuple[ShapeType, StrideType, int]:
+    ) -> tuple[ShapeType, StrideType, IntLikeType]:
         """Compute shape (size), strides, and storage offset for
         indexing operation.
 
@@ -913,7 +921,7 @@ class Tensor:
         It handles `Tensor`, integers, slices, `Ellipsis`, and `None`
         indexing.
 
-        :param key: Indexing specification (int, slice, tuple, etc.).
+        :param key: Indexing specification (IntLikeType, slice, tuple, etc.).
         :return: Tuple of (size, strides, storage offset).
         :raises IndexError: For invalid axis indexing or bounds errors.
         :raises TypeError: For unsupported key types.
@@ -922,16 +930,16 @@ class Tensor:
             key = tuple(key)
         if not hasattr(self, "_cached_sizes_strides_offsets"):
             self._cached_sizes_strides_offsets: dict[
-                tuple[int, str],
-                tuple[ShapeType, StrideType, int],
+                tuple[IntLikeType, str],
+                tuple[ShapeType, StrideType, IntLikeType],
             ] = {}
         cache = (id(self), repr(key))
         if cache in self._cached_sizes_strides_offsets:
             return self._cached_sizes_strides_offsets[cache]
-        axis: int = 0
-        sizes: list[int] = []
-        strides: list[int] = []
-        storage_offset: int = self._storage_offset
+        axis: IntLikeType = 0
+        sizes: ShapeType = []
+        strides: StrideType = []
+        storage_offset: IntLikeType = self._storage_offset
         for dimension in key:
             if axis >= len(self._shape) and dimension is not None:
                 raise IndexError("Too many indices for tensor")
@@ -968,7 +976,7 @@ class Tensor:
         self._cached_sizes_strides_offsets[cache] = strided
         return strided
 
-    def __add__(self, other: Number | Tensor) -> Tensor:
+    def __add__(self, other: Input) -> Tensor:
         """Perform element-wise addition of the tensor with a scalar or
         another tensor.
 
@@ -983,7 +991,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.add(self, other)
 
-    def __radd__(self, other: Number | Tensor) -> Tensor:
+    def __radd__(self, other: Input) -> Tensor:
         """Perform reverse addition, delegating to `__add__`.
 
         :param other: The left-hand operand.
@@ -991,7 +999,7 @@ class Tensor:
         """
         return self.__add__(other)
 
-    def __sub__(self, other: Number | Tensor) -> Tensor:
+    def __sub__(self, other: Input) -> Tensor:
         """Perform element-wise subtraction of the tensor with a scalar
         or another tensor.
 
@@ -1006,7 +1014,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.sub(self, other)
 
-    def __rsub__(self, other: Number | Tensor) -> Tensor:
+    def __rsub__(self, other: Input) -> Tensor:
         """Perform reverse subtraction, delegating to `__sub__`.
 
         :param other: The left-hand operand.
@@ -1014,7 +1022,7 @@ class Tensor:
         """
         return self.__sub__(other)
 
-    def __mul__(self, other: Number | Tensor) -> Tensor:
+    def __mul__(self, other: Input) -> Tensor:
         """Perform element-wise multiplication of the tensor with a
         scalar or another tensor.
 
@@ -1029,7 +1037,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.mul(self, other)
 
-    def __rmul__(self, other: Number | Tensor) -> Tensor:
+    def __rmul__(self, other: Input) -> Tensor:
         """Perform reverse multiplication, delegating to `__mul__`.
 
         :param other: The left-hand operand.
@@ -1037,7 +1045,7 @@ class Tensor:
         """
         return self.__mul__(other)
 
-    def __truediv__(self, other: Number | Tensor) -> Tensor:
+    def __truediv__(self, other: Input) -> Tensor:
         """Perform element-wise division of the tensor with a scalar or
         another tensor.
 
@@ -1052,7 +1060,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.div(self, other)
 
-    def __rtruediv__(self, other: Number | Tensor) -> Tensor:
+    def __rtruediv__(self, other: Input) -> Tensor:
         """Perform element-wise right-hand division of the tensor with a
         scalar or another tensor.
 
@@ -1067,7 +1075,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.div(other, self)
 
-    def __floordiv__(self, other: Number | Tensor) -> Tensor:
+    def __floordiv__(self, other: Input) -> Tensor:
         """Perform element-wise division of the tensor with a scalar or
         another tensor.
 
@@ -1099,7 +1107,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.matmul(self, other)
 
-    def __mod__(self, other: Number | Tensor) -> Tensor:
+    def __mod__(self, other: Input) -> Tensor:
         """Perform element-wise modulo operation of the tensor with a
         scalar or another tensor.
 
@@ -1114,7 +1122,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.remainder(self, other)
 
-    def __pow__(self, other: Number | Tensor) -> Tensor:
+    def __pow__(self, other: Input) -> Tensor:
         """Perform element-wise exponentiation of the tensor with a
         scalar or another tensor.
 
@@ -1129,7 +1137,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.pow(self, other)
 
-    def __rpow__(self, other: Number | Tensor) -> Tensor:
+    def __rpow__(self, other: Input) -> Tensor:
         """Perform reverse exponentiation, delegating to `__pow__`.
 
         :param other: The left-hand operand.
@@ -1155,7 +1163,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.abs(self)
 
-    def __lt__(self, other: Number | Tensor) -> Tensor:
+    def __lt__(self, other: Input) -> Tensor:
         """Perform element-wise less-than operation of the tensor with a
         scalar or another tensor.
 
@@ -1172,7 +1180,7 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Number):
+        if isinstance(other, Scalar):
             new_tensor[:] = (x < other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1188,7 +1196,7 @@ class Tensor:
             )
         return new_tensor
 
-    def __gt__(self, other: Number | Tensor) -> Tensor:
+    def __gt__(self, other: Input) -> Tensor:
         """Perform element-wise greater-than operation of the tensor
         with a scalar or another tensor.
 
@@ -1205,7 +1213,7 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Number):
+        if isinstance(other, Scalar):
             new_tensor[:] = (x > other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1221,7 +1229,7 @@ class Tensor:
             )
         return new_tensor
 
-    def __le__(self, other: Number | Tensor) -> Tensor:
+    def __le__(self, other: Input) -> Tensor:
         """Perform element-wise less-than-equal operation of the tensor
         with a scalar or another tensor.
 
@@ -1238,7 +1246,7 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Number):
+        if isinstance(other, Scalar):
             new_tensor[:] = (x <= other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1254,7 +1262,7 @@ class Tensor:
             )
         return new_tensor
 
-    def __ge__(self, other: Number | Tensor) -> Tensor:
+    def __ge__(self, other: Input) -> Tensor:
         """Perform element-wise greater-than-equal operation of the
         tensor with a scalar or another tensor.
 
@@ -1271,7 +1279,7 @@ class Tensor:
             doesn't match `self.shape`.
         """
         new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Number):
+        if isinstance(other, Scalar):
             new_tensor[:] = (x >= other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1289,12 +1297,12 @@ class Tensor:
 
     def set_(
         self,
-        source: t.Any,
-        storage_offset: int,
+        source: StorageWeakRef,
+        storage_offset: IntLikeType,
         size: ShapeType,
         strides: StrideType,
-        index: int = 0,
-    ) -> int:
+        index: IntLikeType = 0,
+    ) -> IntLikeType:
         """Sets the underlying storage, size, and strides."""
         if len(size) == 1:
             offset = strides[0] // self.itemsize
@@ -1330,7 +1338,7 @@ class Tensor:
                     f"Cannot broadcast {shape} to {size} at dimension "
                     f"{dimension}"
                 )
-        storage = []
+        storage: StorageWeakRef = []
         for index in pdt(*(range(dim) for dim in size)):
             indices = tuple(0 if p == 1 else j for j, p in zip(index, padded))
             storage_offset = sum(
@@ -1345,7 +1353,7 @@ class Tensor:
         self,
         gradient: None | Tensor = None,
         inputs: None | tuple[Tensor, ...] = None,
-        retain_graph: py_impl_bool = False,
+        retain_graph: BoolLikeType = False,
     ) -> None:
         """Compute the gradient of current tensor w.r.t graph leaves.
 
@@ -1361,14 +1369,14 @@ class Tensor:
             raise RuntimeError(
                 "Tensors does not require grad and does not have a grad_fn"
             )
-        graph: list[tuple[Tensor, ...] | Tensor] = []
-        seen: set[tuple[Tensor, ...] | Tensor] = set()
+        graph: list[TensorOrTensors] = []
+        seen: set[TensorOrTensors] = set()
         if gradient is None:
             gradient = Tensor(1, float32)
             gradient[:] = 1.0
         self.grad = gradient
 
-        def iter_graph(inputs: tuple[Tensor, ...] | Tensor) -> None:
+        def iter_graph(inputs: TensorOrTensors) -> None:
             """Recursive function to traverse the computation graph."""
             if isinstance(inputs, Tensor) and inputs not in seen:
                 seen.add(inputs)
@@ -1385,7 +1393,7 @@ class Tensor:
         if not retain_graph:
             self.grad_fn = None
 
-    def render(self, show_dtype: py_impl_bool = False) -> None:
+    def render(self, show_dtype: BoolLikeType = False) -> None:
         """Render the backward computation graph of the tensor as an
         ASCII tree.
 
@@ -1404,10 +1412,11 @@ class Tensor:
             - Nodes are uniquely numbered using post-order traversal,
               ensuring a consistent inside-out visual structure.
         """
-        seen: set[int] = set()
-        shown: set[int] = set()
-        counter: list[int] = [1]
-        tensors: OrderedDict[int, list[int]] = OrderedDict()
+        seen: set[IntLikeType] = set()
+        shown: set[IntLikeType] = set()
+        counter: list[IntLikeType] = [1]
+        Id: t.TypeAlias = list[IntLikeType] | IntLikeType
+        tensors: OrderedDict[IntLikeType, Id] = OrderedDict()
 
         def set_id(input: Tensor) -> None:
             """Set unique ID to each node using post-order traversal."""
@@ -1426,11 +1435,11 @@ class Tensor:
 
         set_id(self)
 
-        def get_id(input: Tensor) -> t.Any:
+        def get_id(input: Tensor) -> Id:
             """Return ID for a tensor, or -1 if unregistered."""
             return tensors.get(id(input), -1)
 
-        def is_leaf(input: Tensor) -> py_impl_bool:
+        def is_leaf(input: Tensor) -> BoolLikeType:
             """Determine if a tensor is a leaf in the autograd graph."""
             return not (
                 hasattr(input, "grad_fn")
@@ -1442,8 +1451,8 @@ class Tensor:
         def iter_graph(
             input: Tensor,
             indent: str = "",
-            is_last: py_impl_bool = True,
-            is_root: py_impl_bool = True,
+            is_last: BoolLikeType = True,
+            is_root: BoolLikeType = True,
         ) -> None:
             """
             Recursively render the computation graph as an ASCII tree.
@@ -1492,12 +1501,12 @@ class Tensor:
         return self.storage
 
     @property
-    def base(self) -> None | t.Any:
+    def base(self) -> t.Any:
         """Return underlying buffer (if any)."""
         return self._base
 
     @property
-    def dtype(self) -> t.Any:
+    def dtype(self) -> Dtype:
         """Return the data type of the tensor elements (mainly str)."""
         return self._dtype
 
@@ -1516,18 +1525,18 @@ class Tensor:
         """Return True if tensor is a meta tensor else False."""
         return False
 
-    def dim(self) -> int:
+    def dim(self) -> IntLikeType:
         """Return the number of dimensions of the tensor."""
         return len(self._shape)
 
     ndim = property(dim)
 
     @property
-    def nbytes(self) -> t.Any:
+    def nbytes(self) -> IntLikeType:
         """Return number of byte size of a tensor."""
-        return self.nelement() * self.itemsize
+        return self.nelement() * self.element_size()
 
-    def element_size(self) -> int:
+    def element_size(self) -> IntLikeType:
         """Return the size, in bytes, of each tensor element."""
         return py_impl_int(self._itemsize)
 
@@ -1560,9 +1569,9 @@ class Tensor:
             raise AttributeError(
                 "New shape is incompatible with the current memory layout"
             )
+        new_strides: StrideType = []
         shape.append(1)
         strides.append(strides[-1])
-        new_strides = []
         idx = len(shape) - 1
         for dim in reversed(value):
             if dim == 1:
@@ -1577,7 +1586,7 @@ class Tensor:
         self._shape = value
         self._strides = tuple(reversed(new_strides))
 
-    def flat(self) -> list[Number]:
+    def flat(self) -> list[Scalar]:
         """Flatten the tensor and return all its elements in a list.
 
         This method traverses through the tensor and collects its
@@ -1590,13 +1599,13 @@ class Tensor:
         """
         return list(self)
 
-    def nelement(self) -> int:
+    def nelement(self) -> IntLikeType:
         """Return total number of elements in a tensor."""
         return numel(self._shape)
 
     numel = nelement
 
-    def size(self, dim: None | int = None) -> ShapeType | int:
+    def size(self, dim: None | Dim = None) -> ShapeType | IntLikeType:
         """Returns the size of the tensor."""
         if dim is not None:
             return self._shape[dim]
@@ -1606,7 +1615,7 @@ class Tensor:
         """Return the strides for traversing the tensor dimensions."""
         return tuple(idx // self.itemsize for idx in self._strides)
 
-    def to(self, dtype: t.Any) -> Tensor:
+    def to(self, dtype: Dtype) -> Tensor:
         """Return a copy of the tensor cast to a specified data type.
 
         This method creates a new `Tensor` with the same shape and data
@@ -1674,7 +1683,7 @@ class Tensor:
             strides=self._strides,
         )
 
-    def view(self, *shape: py_impl_int) -> Tensor:
+    def view(self, *shape: IntLikeType) -> Tensor:
         """Return a new view of the tensor with the specified shape.
 
         This method attempts to reshape the tensor while keeping the
@@ -1776,7 +1785,7 @@ class Tensor:
         new_tensor.storage = self.storage
         return new_tensor
 
-    def transpose(self, dim0: py_impl_int, dim1: py_impl_int) -> Tensor:
+    def transpose(self, dim0: IntLikeType, dim1: IntLikeType) -> Tensor:
         """Transpose the tensor by permuting its dimensions.
 
         This method returns a view of the tensor with its dimensions
@@ -1797,7 +1806,7 @@ class Tensor:
 
     T = property(t)
 
-    def unique(self, sorted: py_impl_bool = True) -> Tensor:
+    def unique(self, sorted: BoolLikeType = True) -> Tensor:
         """Return unique elements from the tensor.
 
         :param sorted: Whether to sort the unique elements before
@@ -1825,7 +1834,7 @@ class Tensor:
 
     negative = neg
 
-    def fill_(self, value: Number) -> Tensor:
+    def fill_(self, value: Scalar) -> Tensor:
         """Fill the entire tensor with a scalar value.
 
         This method assigns the given scalar value to all elements in
@@ -1842,12 +1851,12 @@ class Tensor:
             [2] The method uses slicing (`self[:] = value`) to
                 efficiently set all elements to the specified value.
         """
-        if not isinstance(value, Number):
+        if not isinstance(value, Scalar):
             raise ValueError("Value must be an integer or a float")
         self[:] = value
         return self
 
-    def unsqueeze(self, dim: py_impl_int) -> Tensor:
+    def unsqueeze(self, dim: IntLikeType) -> Tensor:
         """Return a new tensor with a singleton dimension inserted at
         the specified position.
 
@@ -1872,7 +1881,7 @@ class Tensor:
         new_tensor[:] = self[:]
         return new_tensor
 
-    def add(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
+    def add(self, other: Input, *, alpha: Scalar = 1) -> Tensor:
         """Perform element-wise addition of the tensor with a scalar or
         another tensor, scaled by alpha.
 
@@ -1888,7 +1897,7 @@ class Tensor:
         """
         return self.__add__(alpha * other)
 
-    def sub(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
+    def sub(self, other: Input, *, alpha: Scalar = 1) -> Tensor:
         """Perform element-wise subtraction of the tensor with a scalar
         or another tensor, scaled by alpha.
 
@@ -1904,7 +1913,7 @@ class Tensor:
         """
         return self.__sub__(alpha * other)
 
-    def mul(self, other: Number | Tensor, *, alpha: Number = 1) -> Tensor:
+    def mul(self, other: Input, *, alpha: Scalar = 1) -> Tensor:
         """Perform element-wise multiplication of the tensor with a
         scalar or another tensor, scaled by alpha.
 
@@ -1920,9 +1929,7 @@ class Tensor:
         """
         return self.__mul__(alpha * other)
 
-    def div(
-        self, other: Number | Tensor, *, rounding_mode: None | str = None
-    ) -> t.Any:
+    def div(self, other: Input, *, rounding_mode: None | str = None) -> t.Any:
         """Perform element-wise division of the tensor with a scalar or
         another tensor.
 
@@ -1997,8 +2004,8 @@ class Tensor:
 
     def sum(
         self,
-        dim: None | py_impl_int = None,
-        keepdim: py_impl_bool = False,
+        dim: None | Dim = None,
+        keepdim: BoolLikeType = False,
     ) -> Tensor:
         """Compute the sum of elements in the tensor across a specified
         dimension.
@@ -2021,8 +2028,8 @@ class Tensor:
 
     def max(
         self,
-        dim: None | py_impl_int = None,
-        keepdim: py_impl_bool = False,
+        dim: None | Dim = None,
+        keepdim: BoolLikeType = False,
     ) -> Tensor:
         """Return the maximum of elements in the tensor across a
         specified dimension.
@@ -2045,8 +2052,8 @@ class Tensor:
 
     def min(
         self,
-        dim: None | py_impl_int = None,
-        keepdim: py_impl_bool = False,
+        dim: None | Dim = None,
+        keepdim: BoolLikeType = False,
     ) -> Tensor:
         """Return the minimum of elements in the tensor across a
         specified dimension.
@@ -2069,8 +2076,8 @@ class Tensor:
 
     def mean(
         self,
-        dim: None | py_impl_int = None,
-        keepdim: py_impl_bool = False,
+        dim: None | Dim = None,
+        keepdim: BoolLikeType = False,
     ) -> Tensor:
         """Compute the mean of elements in the tensor across a specified
         dimension.
@@ -2093,8 +2100,8 @@ class Tensor:
 
     def std(
         self,
-        dim: None | py_impl_int = None,
-        keepdim: py_impl_bool = False,
+        dim: None | Dim = None,
+        keepdim: BoolLikeType = False,
     ) -> Tensor:
         """Compute the standard deviation of elements in the tensor
         across a specified dimension.
@@ -2156,7 +2163,7 @@ class Tensor:
         """
         return slowtorch.nn.functional.relu(self)
 
-    def elu(input: Tensor, alpha: builtins.float = 1.0) -> Tensor:
+    def elu(self, alpha: FloatLikeType = 1.0) -> Tensor:
         """Apply the Exponential Linear Unit (ELU) function element-
         wise.
 
@@ -2171,7 +2178,7 @@ class Tensor:
         :return: Output tensor after applying the ELU function, with
             gradients linked for backpropagation.
         """
-        return slowtorch.nn.functional.elu(input, alpha)
+        return slowtorch.nn.functional.elu(self, alpha)
 
     def tanh(self) -> Tensor:
         """Apply the Hyperbolic Tangent (Tanh) function element-wise.
@@ -2203,7 +2210,7 @@ class Tensor:
 
     def softmax(
         self,
-        dim: None | py_impl_int = None,
+        dim: None | Dim = None,
         dtype: None | Dtype = None,
     ) -> Tensor:
         """Apply the Softmax function element-wise.
@@ -2223,7 +2230,7 @@ class Tensor:
 
     def log_softmax(
         self,
-        dim: None | py_impl_int = None,
+        dim: None | Dim = None,
         dtype: None | Dtype = None,
     ) -> Tensor:
         """Apply the Softmax function followed by Logarithm.
@@ -2240,10 +2247,15 @@ class Tensor:
         return slowtorch.nn.functional.log_softmax(self, dim=dim, dtype=dtype)
 
 
+Input: t.TypeAlias = Scalar | Tensor
+StorageWeakRef: t.TypeAlias = t.Sequence[Input]
+TensorOrTensors: t.TypeAlias = tuple[Tensor, ...] | Tensor
+
+
 @function_dispatch
 def save(
     obj: object,
-    f: FILE_LIKE,
+    f: FileLike,
     pickle_module: types.ModuleType = pickle,
     pickle_protocol: t.Literal[2] = 2,
 ) -> None:
@@ -2254,9 +2266,9 @@ def save(
 
 @function_dispatch
 def load(
-    f: FILE_LIKE,
+    f: FileLike,
     pickle_module: types.ModuleType = pickle,
-    weights_only: None | py_impl_bool = None,
+    weights_only: None | BoolLikeType = None,
 ) -> t.Any:
     """Load an object saved from a file."""
     weights_only = weights_only

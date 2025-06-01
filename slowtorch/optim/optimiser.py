@@ -32,9 +32,15 @@ from __future__ import annotations
 
 import typing as t
 
+from slowtorch._tensor import BoolLikeType
+from slowtorch._tensor import FloatLikeType
 from slowtorch._tensor import Tensor
 
-__all__ = ["Optimiser", "Optimizer", "SGD"]
+__all__ = [
+    "Optimiser",
+    "Optimizer",
+    "SGD",
+]
 
 ParamsT: t.TypeAlias = (
     t.Iterable[Tensor]
@@ -68,7 +74,7 @@ class Optimiser:
         self.param_groups.append(param_group)
         self.state: dict[Tensor, dict[str, t.Any]] = {}
 
-    def zero_grad(self, set_to_none: bool = True) -> None:
+    def zero_grad(self, set_to_none: BoolLikeType = True) -> None:
         """Reset gradients of all parameters in all parameter groups.
 
         This is essential before computing gradients via `.backward()`,
@@ -85,7 +91,10 @@ class Optimiser:
                     else:
                         param.grad = Tensor(1)
 
-    def step(self, closure: None | t.Callable[[], float] = None) -> None:
+    def step(
+        self,
+        closure: None | t.Callable[[], FloatLikeType] = None,
+    ) -> None:
         """Perform a single optimisation step.
 
         Subclasses must override this method to define parameter update
@@ -131,15 +140,15 @@ class SGD(Optimiser):
     def __init__(
         self,
         params: ParamsT,
-        lr: float | Tensor = 1e-3,
-        momentum: float = 0.0,
-        dampening: float = 0.0,
-        weight_decay: float = 0.0,
-        nesterov: bool = False,
+        lr: FloatLikeType | Tensor = 1e-3,
+        momentum: FloatLikeType = 0.0,
+        dampening: FloatLikeType = 0.0,
+        weight_decay: FloatLikeType = 0.0,
+        nesterov: BoolLikeType = False,
         *,
-        maximise: bool = False,
-        foreach: None | bool = None,
-        differentiable: bool = None,
+        maximise: BoolLikeType = False,
+        foreach: None | BoolLikeType = None,
+        differentiable: BoolLikeType = None,
     ) -> None:
         """Initialise stochastic gradient descent optimiser."""
         if isinstance(lr, Tensor) and lr.numel() != 1:
@@ -166,7 +175,9 @@ class SGD(Optimiser):
             )
         super().__init__(params, defaults)
 
-    def step(self, closure: None | t.Callable[[], float] = None) -> None:
+    def step(
+        self, closure: None | t.Callable[[], FloatLikeType] = None
+    ) -> None:
         """Perform a single parameter update using SGD.
 
         Applies weight decay (if specified), handles momentum buffers,

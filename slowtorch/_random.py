@@ -17,6 +17,7 @@ import random
 
 from slowtorch import function_dispatch
 from slowtorch._tensor import DeviceType
+from slowtorch._tensor import IntLikeType
 from slowtorch._tensor import Tensor
 
 
@@ -32,7 +33,7 @@ class Generator:
 
     __module__: str = "slowtorch._C"
 
-    def __init__(self, device: "DeviceType" = None) -> None:
+    def __init__(self, device: None | DeviceType = None) -> None:
         """Initialise a `Generator` instance with device."""
         self.device = device
         self.internal = random.Random()
@@ -47,20 +48,20 @@ class Generator:
 
         return tensor(self.internal.getstate())
 
-    def set_state(self, state: tuple[int, ...]) -> None:
+    def set_state(self, state: tuple[IntLikeType, ...]) -> None:
         """Set the internal RNG state.
 
         :param state: State to restore the RNG to.
         """
         self.internal.setstate(state)
 
-    def initial_seed(self) -> int:
+    def initial_seed(self) -> IntLikeType:
         """Set the seed for RNG to ensure reproducibility."""
         return self._seed
 
     seed = initial_seed
 
-    def manual_seed(self, seed: int) -> Generator:
+    def manual_seed(self, seed: IntLikeType) -> Generator:
         """Set the seed for RNG to ensure reproducibility."""
         self.internal.seed(seed)
         return self
@@ -70,7 +71,7 @@ default_generator = Generator()
 
 
 @function_dispatch
-def set_rng_state(new_state: tuple[int, ...]) -> None:
+def set_rng_state(new_state: tuple[IntLikeType, ...]) -> None:
     """Set the RNG state."""
     default_generator.set_state(new_state)
 
@@ -82,7 +83,7 @@ def get_rng_state() -> Tensor:
 
 
 @function_dispatch
-def manual_seed(seed: int) -> Generator:
+def manual_seed(seed: IntLikeType) -> Generator:
     """Set the seed for generating random numbers.
 
     :param seed: The desired seed.
@@ -92,7 +93,7 @@ def manual_seed(seed: int) -> Generator:
 
 
 @function_dispatch
-def seed() -> int:
+def seed() -> IntLikeType:
     """Set the seed for generating random numbers to a non-deterministic
     random number. Return a 64-bit number used to seed the RNG.
     """

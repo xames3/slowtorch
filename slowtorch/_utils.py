@@ -84,9 +84,3 @@ def _fill_tensor(tensor: Tensor, values: Iterator[float]) -> None:
     else:
         for dim in range(len(tensor)):
             tensor[dim] = next(values)
-
-
-@function_dispatch
-def safe_exp(value: float) -> float:
-    """Dummy function to type safe compute negative exponentiations."""
-    return math.exp(-value)

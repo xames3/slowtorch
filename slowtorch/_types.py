@@ -29,30 +29,38 @@ import typing as t
 
 __all__: list[str] = [
     "ArrayLike",
+    "ArrayLikeOrScalar",
+    "BoolLikeType",
     "DTypeLike",
     "DTypeLikeNested",
-    "FILE_LIKE",
-    "Number",
+    "FileLike",
+    "FloatLikeType",
+    "IntLikeType",
+    "Scalar",
     "VoidDTypeLike",
 ]
 
-Number: t.TypeAlias = int | float | bool
-ArrayLike = t.TypeVar("ArrayLike")
+IntLikeType: t.TypeAlias = int
+FloatLikeType: t.TypeAlias = float
+BoolLikeType: t.TypeAlias = bool
+Scalar: t.TypeAlias = IntLikeType | FloatLikeType | BoolLikeType
+ArrayLike: t.TypeAlias = t.Sequence[Scalar]
+ArrayLikeOrScalar: t.TypeAlias = ArrayLike | Scalar
 DTypeLikeNested: t.TypeAlias = t.Any
 VoidDTypeLike: t.TypeAlias = (
-    tuple[DTypeLikeNested, int]
+    tuple[DTypeLikeNested, IntLikeType]
     | tuple[DTypeLikeNested]
     | list[t.Any]
     | tuple[DTypeLikeNested, DTypeLikeNested]
 )
 DTypeLike: t.TypeAlias = None | type[t.Any] | str | VoidDTypeLike
-FILE_LIKE: t.TypeAlias = (
-    int | str | bytes | os.PathLike[str] | os.PathLike[bytes]
+FileLike: t.TypeAlias = (
+    IntLikeType | str | bytes | os.PathLike[str] | os.PathLike[bytes]
 )
 IndexLike: t.TypeAlias = (
-    int
+    None
+    | IntLikeType
     | slice
     | types.EllipsisType
-    | None
-    | tuple[int | slice | types.EllipsisType | None, ...]
+    | tuple[None | IntLikeType | slice | types.EllipsisType, ...]
 )
