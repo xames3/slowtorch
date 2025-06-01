@@ -4,7 +4,7 @@ SlowTorch Functions API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Wednesday, May 28 2025
+Last updated on: Saturday, May 31 2025
 
 This module provides essential tensor creation and initialisation
 utilities for the `slowtorch` package. It contains a suite of functions
@@ -64,25 +64,29 @@ import slowtorch
 from slowtorch import function_dispatch
 from slowtorch._random import Generator
 from slowtorch._random import default_generator
+from slowtorch._tensor import BoolLikeType
 from slowtorch._tensor import DeviceType
+from slowtorch._tensor import Dtype
+from slowtorch._tensor import IntLikeType
+from slowtorch._tensor import ShapeType
+from slowtorch._tensor import StorageWeakRef
 from slowtorch._tensor import Tensor
-from slowtorch._types import ArrayLike
-from slowtorch._types import Number
-from slowtorch._utils import Dtype
-from slowtorch._utils import Size
+from slowtorch._tensor import check_same_shape
+from slowtorch._tensor import dtypecheck
+from slowtorch._tensor import infer_size_shapes
+from slowtorch._types import ArrayLikeOrScalar
+from slowtorch._types import FloatLikeType
+from slowtorch._types import Scalar
 from slowtorch._utils import _fill_tensor
-from slowtorch._utils import calculate_shape_from_data
-from slowtorch._utils import dtypecheck
-from slowtorch._utils import has_uniform_shape
 
 
 @function_dispatch
 def tensor(
-    data: Number | ArrayLike,
+    data: ArrayLikeOrScalar,
     *,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a tensor from the input data.
 
@@ -101,22 +105,22 @@ def tensor(
     :return: A new instance of the Tensor object.
     :raises ValueError: If the input data does not have a uniform shape.
     """
-    if not has_uniform_shape(data):
+    if not check_same_shape(data):
         raise ValueError("Input data is not uniformly nested")
-    size = size if (size := calculate_shape_from_data(data)) else (1,)
-    array_like: list[t.Any] = []
+    size = size if (size := infer_size_shapes(data)) else (1,)
+    storage: StorageWeakRef = []
 
-    def chain_from_iterable(object: Number | ArrayLike) -> None:
+    def chain_from_iterable(a: ArrayLikeOrScalar) -> None:
         """Recursively flatten the input iterable."""
-        if isinstance(object, Iterable) and not isinstance(data, (str, bytes)):
-            for idx in object:
+        if isinstance(a, Iterable) and not isinstance(data, (str, bytes)):
+            for idx in a:
                 chain_from_iterable(idx)
         else:
-            array_like.append(object)
+            storage.append(a)
 
     chain_from_iterable(data)
     if dtype is None:
-        types = set(type(x) for x in array_like)
+        types = set(type(item) for item in storage)
         dtype = (
             bool
             if types <= {bool}
@@ -127,17 +131,17 @@ def tensor(
             )
         )
     new_tensor = Tensor(size, dtype, device, requires_grad)
-    new_tensor[:] = array_like
+    new_tensor[:] = storage
     return new_tensor
 
 
 @function_dispatch
 def randn(
-    *size: int,
+    *size: IntLikeType,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Return a tensor filled with random numbers from a normal
     distribution with mean 0 and variance 1.
@@ -164,7 +168,7 @@ def randn(
         raise RuntimeError(
             f"'normal' not implemented for {dtype.typename[:-6]!r}"
         )
-    shape: tuple[int, ...]
+    shape: ShapeType
     if len(size) == 1 and isinstance(size[0], Iterable):
         shape = size[0]
     else:
@@ -180,11 +184,11 @@ def randn(
 
 @function_dispatch
 def rand(
-    *size: int,
+    *size: IntLikeType,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Return a tensor filled with random numbers from a uniform
     distribution on the interval [0, 1).
@@ -211,7 +215,7 @@ def rand(
         raise RuntimeError(
             f"'uniform' not implemented for {dtype.typename[:-6]!r}"
         )
-    shape: tuple[int, ...]
+    shape: ShapeType
     if len(size) == 1 and isinstance(size[0], Iterable):
         shape = size[0]
     else:
@@ -227,13 +231,13 @@ def rand(
 
 @function_dispatch
 def randint(
-    low: int = 0,
-    high: None | int = None,
-    size: None | Size | tuple[int, ...] = None,
+    low: IntLikeType = 0,
+    high: None | IntLikeType = None,
+    size: None | ShapeType = None,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Return a tensor filled with random numbers from a uniform
     distribution between low (inclusive) and high (exclusive).
@@ -259,7 +263,7 @@ def randint(
     if dtype is None:
         dtype = slowtorch.int64
     if isinstance(size, tuple):
-        shape: tuple[int, ...]
+        shape: ShapeType
         if len(size) == 1 and isinstance(size[0], Iterable):
             shape = size[0]
         else:
@@ -279,11 +283,11 @@ def randint(
 
 @function_dispatch
 def randperm(
-    n: int,
+    n: IntLikeType,
     generator: None | Generator = None,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Return a tensor filled with random permutation of integers from
     0 to n - 1.
@@ -302,18 +306,18 @@ def randperm(
         generator = default_generator
     if dtype is None:
         dtype = slowtorch.int64
-    new_tensor = Tensor((n,), dtype, device, requires_grad)
-    data = list(range(n))
-    generator.internal.shuffle(data)
-    new_tensor[:] = data
+    new_tensor = Tensor(n, dtype, device, requires_grad)
+    storage = list(range(n))
+    generator.internal.shuffle(storage)
+    new_tensor[:] = storage
     return new_tensor
 
 
 @function_dispatch
 def uniform_(
     tensor: Tensor,
-    a: float = 0.0,
-    b: float = 1.0,
+    a: FloatLikeType = 0.0,
+    b: FloatLikeType = 1.0,
     generator: None | Generator = None,
 ) -> Tensor:
     """Fill the input tensor with values drawn from a uniform
@@ -347,10 +351,10 @@ def uniform_(
 
 @function_dispatch
 def empty(
-    *size: int,
+    *size: IntLikeType,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor without initialising its values.
 
@@ -379,7 +383,7 @@ def empty(
             "Expected a sequence of integers or a single integer, "
             f"got {size!r}"
         )
-    shape: tuple[int, ...]
+    shape: ShapeType
     if len(size) == 1 and isinstance(size[0], Iterable):
         shape = size[0]
     else:
@@ -392,10 +396,10 @@ def empty(
 
 @function_dispatch
 def zeros(
-    *size: int,
+    *size: IntLikeType,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor filled with zeros.
 
@@ -425,8 +429,8 @@ def zeros(
 def zeros_like(
     input: Tensor,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor with the same size and type as a given
     tensor, filled with zeros.
@@ -456,10 +460,10 @@ def zeros_like(
 
 @function_dispatch
 def ones(
-    *size: int,
+    *size: IntLikeType,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor filled with ones.
 
@@ -483,7 +487,8 @@ def ones(
         device=device,
         requires_grad=requires_grad,
     )
-    new_tensor.fill_(1.0)
+    one = 1.0 if dtypecheck(dtype) == slowtorch.float32 else 1
+    new_tensor.fill_(one)
     return new_tensor
 
 
@@ -491,8 +496,8 @@ def ones(
 def ones_like(
     input: Tensor,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor with the same size and type as a given
     tensor, filled with ones.
@@ -520,11 +525,11 @@ def ones_like(
 
 @function_dispatch
 def full(
-    *size: int,
-    fill_value: Number,
+    *size: IntLikeType,
+    fill_value: Scalar,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor filled with `fill_value`.
 
@@ -556,10 +561,10 @@ def full(
 @function_dispatch
 def full_like(
     input: Tensor,
-    fill_value: Number,
+    fill_value: Scalar,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Create a new tensor with the same size and type as a given
     tensor, filled with `fill_value`.
@@ -594,7 +599,7 @@ def full_like(
 @function_dispatch
 def tril(
     input: Tensor,
-    diagonal: int = 0,
+    diagonal: IntLikeType = 0,
 ) -> Tensor:
     """Create a lower triangular matrix (2-D tensor) with elements of
     the input below and on the main diagonal, and zeros elsewhere.
@@ -615,26 +620,26 @@ def tril(
     """
     if len(input.shape) != 2:
         raise RuntimeError("tril: input tensor must have 2 dimensions")
-    m, n = input.shape
+    M, N = input.shape
     new_tensor = empty(
-        (m, n),
+        (M, N),
         dtype=input.dtype,
         device=input.device,
         requires_grad=input.requires_grad,
     )
-    for idx in range(m):
-        for jdx in range(n):
-            if jdx - idx <= diagonal:
-                new_tensor[idx, jdx] = input[idx, jdx]
+    for m in range(M):
+        for n in range(N):
+            if n - m <= diagonal:
+                new_tensor[m, n] = input[m, n]
             else:
-                new_tensor[idx, jdx] = 0
+                new_tensor[m, n] = 0
     return new_tensor
 
 
 @function_dispatch
 def triu(
     input: Tensor,
-    diagonal: int = 0,
+    diagonal: IntLikeType = 0,
 ) -> Tensor:
     """Create a upper triangular matrix (2-D tensor) with elements of
     the input above and on the main diagonal, and zeros elsewhere.
@@ -655,30 +660,30 @@ def triu(
     """
     if len(input.shape) != 2:
         raise RuntimeError("triu: input tensor must have 2 dimensions")
-    m, n = input.shape
+    M, N = input.shape
     new_tensor = empty(
-        (m, n),
+        (M, N),
         dtype=input.dtype,
         device=input.device,
         requires_grad=input.requires_grad,
     )
-    for idx in range(m):
-        for jdx in range(n):
-            if jdx - idx < diagonal:
-                new_tensor[idx, jdx] = 0
+    for m in range(M):
+        for n in range(N):
+            if n - m < diagonal:
+                new_tensor[m, n] = 0
             else:
-                new_tensor[idx, jdx] = input[idx, jdx]
+                new_tensor[m, n] = input[m, n]
     return new_tensor
 
 
 @function_dispatch
 def arange(
-    start: Number = 0,
-    end: Number = float("inf"),
-    step: Number = 1,
+    start: Scalar = 0,
+    end: Scalar = float("inf"),
+    step: Scalar = 1,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Return evenly spaced values within a given range.
 
@@ -710,7 +715,10 @@ def arange(
             else slowtorch.float32
         )
     new_tensor = empty(
-        size, dtype=dtype, device=device, requires_grad=requires_grad
+        size,
+        dtype=dtype,
+        device=device,
+        requires_grad=requires_grad,
     )
     new_tensor[:] = (start + idx * step for idx in range(size))
     return new_tensor
@@ -718,12 +726,12 @@ def arange(
 
 @function_dispatch
 def linspace(
-    start: Number,
-    end: Number,
-    steps: int,
+    start: Scalar,
+    end: Scalar,
+    steps: IntLikeType,
     dtype: None | Dtype = None,
-    device: DeviceType = None,
-    requires_grad: bool = False,
+    device: None | DeviceType = None,
+    requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Creates a 1-D tensor of `steps` equally spaced points between
     `start` and `end` (inclusive).
@@ -741,21 +749,21 @@ def linspace(
     :raises ValueError: If `steps` is not a positive integer.
     """
     if steps <= 0:
-        raise ValueError("Number of steps must be a positive integer")
+        raise ValueError("Scalar of steps must be a positive integer")
     if dtype is None:
         dtype = slowtorch.float32
     new_tensor = empty(
         steps, dtype=dtype, device=device, requires_grad=requires_grad
     )
     jump = (end - start) / (steps - 1) if steps > 1 else 0
-    new_tensor[:] = [start + idx * jump for idx in range(steps)]
+    new_tensor[:] = (start + idx * jump for idx in range(steps))
     return new_tensor
 
 
 @function_dispatch
 def cat(
     tensors: t.Sequence[Tensor],
-    dim: int = 0,
+    dim: IntLikeType = 0,
 ) -> Tensor:
     """Concatenate the given sequence of tensors in the given dimension.
 

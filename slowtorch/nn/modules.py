@@ -4,7 +4,7 @@ SlowTorch Modules API
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, January 16 2025
-Last updated on: Thursday, May 29 2025
+Last updated on: Saturday, May 31 2025
 
 This module provides a foundational framework for building and training
 neural networks, inspired by PyTorch's flexible and dynamic design. It
@@ -44,6 +44,7 @@ This module provides key important features like::
 
 from __future__ import annotations
 
+import abc
 import math
 import typing as t
 from collections import OrderedDict
@@ -51,32 +52,33 @@ from collections import OrderedDict
 import slowtorch
 from slowtorch import randn
 from slowtorch._tensor import DeviceType
+from slowtorch._tensor import Dim
+from slowtorch._tensor import Dtype
 from slowtorch._tensor import Tensor
-from slowtorch._utils import Dtype
+from slowtorch._types import BoolLikeType
+from slowtorch._types import FloatLikeType
+from slowtorch._types import IntLikeType
 from slowtorch._utils import set_module
 from slowtorch._variable_functions import uniform_
 
-__all__: list[str] = [
-    "ELU",
-    "Embedding",
-    "Flatten",
-    "Identity",
-    "L1Loss",
-    "Linear",
-    "MSELoss",
-    "Module",
-    "NLLLoss",
-    "Parameter",
-    "ReLU",
-    "Sequential",
-    "Sigmoid",
-    "Softmax",
-    "Tanh",
-    "_Loss",
-]
+__all__: list[str] = []
+
+_T = t.TypeVar("_T")
+
+
+def class_dispatch(klass: t.Callable[..., _T]) -> t.Callable[..., _T]:
+    """Decorator to register a classes in the global namespace.
+
+    :param klass: The class to be registered and exposed.
+    :return: The original class, unmodified.
+    """
+    globals()[klass.__name__] = klass
+    __all__.append(klass.__name__)
+    return klass
 
 
 @set_module("slowtorch.nn.parameter")
+@class_dispatch
 class Parameter(Tensor):
     """A specialised subclass of `Tensor` designed to represent
     parameters in modules. A `Parameter` is typically used to define
@@ -96,17 +98,30 @@ class Parameter(Tensor):
         to `True`.
     """
 
+    __slots__ = ()
+
     def __init__(
         self,
         data: None | Tensor = None,
-        requires_grad: bool = True,
+        requires_grad: BoolLikeType = True,
     ) -> None:
         """Initialise a `Parameter` instance with optional data."""
         if data is None:
             data = randn(1, requires_grad=requires_grad)
+        else:
+            data = data.clone()
         data.requires_grad = requires_grad
-        for key, value in data.__dict__.items():
-            setattr(self, key, value)
+        super().__init__(
+            shape=data._shape,
+            dtype=data._dtype,
+            device=data.device,
+            requires_grad=requires_grad,
+        )
+        self[...] = data[...]
+        self.grad_fn = data.grad_fn
+        self.grad = data.grad
+        self._base = data._base
+        self.data = self
 
     @property
     def data(self) -> Tensor:
@@ -126,7 +141,8 @@ class Parameter(Tensor):
 
 
 @set_module("slowtorch.nn.modules.module")
-class Module:
+@class_dispatch
+class Module(abc.ABC):
     """Base class for all neural network modules.
 
     All models should subclass this class. This class provides
@@ -139,7 +155,7 @@ class Module:
         """Initialise `Module` instance with optional arguments."""
         self.args = args
         self.kwargs = kwargs
-        self.training: bool = True
+        self.training: BoolLikeType = True
         self._modules: dict[str, None | Module] = OrderedDict()
         self._parameters: dict[str, None | Parameter] = OrderedDict()
 
@@ -162,11 +178,17 @@ class Module:
             self._parameters[name] = value
         super().__setattr__(name, value)
 
-    def __call__(self, *input: t.Any, **kwargs: t.Any) -> Tensor:
+    def __call__(self, *input: Tensor, **kwargs: t.Any) -> Tensor:
         """Invoke the `forward` method."""
         return self.forward(*input, **kwargs)
 
-    def forward(self, *input: t.Any, **kwargs: t.Any) -> Tensor:
+    @t.overload
+    def forward(self, input: Tensor) -> Tensor: ...
+    @t.overload
+    def forward(self, input: Tensor, target: Tensor) -> Tensor: ...
+
+    @abc.abstractmethod
+    def forward(self, *input: Tensor, **kwargs: t.Any) -> Tensor:
         """Define the computation performed at every call.
 
         Should be overridden by all subclasses.
@@ -178,17 +200,19 @@ class Module:
             ' required "forward" function'
         )
 
-    def children(self) -> t.Iterator[None | Module]:
+    def children(self) -> ModuleType:
         """Yield an iterator over immediate child modules."""
         yield from self._modules.values()
 
-    def modules(self) -> t.Iterator[None | Module]:
+    def modules(self) -> ModuleType:
         """Yield an iterator over all modules in the network."""
         yield self
         for module in self.children():
             yield from module.modules()
 
-    def parameters(self, recurse: bool = True) -> t.Iterator[None | Parameter]:
+    def parameters(
+        self, recurse: BoolLikeType = True
+    ) -> t.Iterator[None | Parameter]:
         """Return an iterator over module parameters.
 
         :param recurse: If True, include parameters of submodules,
@@ -200,7 +224,7 @@ class Module:
             for module in self.children():
                 yield from module.parameters()
 
-    def zero_grad(self, set_to_none: bool = True) -> None:
+    def zero_grad(self, set_to_none: BoolLikeType = True) -> None:
         """Reset the gradients of all parameters in the module and its
         children.
 
@@ -217,7 +241,7 @@ class Module:
                 else:
                     param.grad = Tensor(1)
 
-    def train(self, mode: bool = True) -> Module:
+    def train(self, mode: BoolLikeType = True) -> Module:
         """Set the module and its submodules to training mode.
 
         :param mode: Whether to set to training mode or evaluation mode,
@@ -234,7 +258,11 @@ class Module:
         return self.train(False)
 
 
+ModuleType: t.TypeAlias = t.Iterator[None | Module]
+
+
 @set_module("slowtorch.nn.modules.container")
+@class_dispatch
 class Sequential(Module):
     """A container module that sequentially applies a list of
     sub-modules.
@@ -266,7 +294,7 @@ class Sequential(Module):
         """
         return len(self._modules)
 
-    def __iter__(self) -> t.Iterator[None | Module]:
+    def __iter__(self) -> ModuleType:
         """Return an iterator over the sub-modules in `Sequential`
         container.
 
@@ -288,6 +316,7 @@ class Sequential(Module):
 
 
 @set_module("slowtorch.nn.modules.flatten")
+@class_dispatch
 class Flatten(Module):
     """Flatten a contiguous range of dims into a tensor."""
 
@@ -305,13 +334,14 @@ class Flatten(Module):
 
 
 @set_module("slowtorch.nn.modules.linear")
+@class_dispatch
 class Identity(Module):
     """A module that performs the identity operation: it returns the
     input tensor unchanged. This is particularly useful as a placeholder
     in model architectures or for debugging.
     """
 
-    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+    def __init__(self) -> None:
         """Initialise `Identity` instance."""
         super().__init__()
 
@@ -333,6 +363,7 @@ class Identity(Module):
 
 
 @set_module("slowtorch.nn.modules.linear")
+@class_dispatch
 class Linear(Module):
     """Represent a fully connected (linear) layer, a key component in
     neural networks, which performs a linear transformation on the
@@ -365,16 +396,16 @@ class Linear(Module):
         to `None`.
     """
 
-    in_features: int
-    out_features: int
+    in_features: IntLikeType
+    out_features: IntLikeType
     weight: Tensor
 
     def __init__(
         self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        device: DeviceType = None,
+        in_features: IntLikeType,
+        out_features: IntLikeType,
+        bias: BoolLikeType = True,
+        device: None | DeviceType = None,
         dtype: None | Dtype = None,
     ) -> None:
         """Initialise the `Linear` module with the specified input and
@@ -414,7 +445,7 @@ class Linear(Module):
         if self.bias is not None:
             uniform_(self.bias, -k, k)
 
-    def forward(self, input: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> t.Any:
         """Perform the forward pass of the linear layer.
 
         The forward pass computes the linear transformation on the
@@ -437,6 +468,7 @@ class Linear(Module):
 
 
 @set_module("slowtorch.nn.modules.sparse")
+@class_dispatch
 class Embedding(Module):
     """A simple lookup table that stores embeddings of a fixed dictionary
     and size.
@@ -457,17 +489,17 @@ class Embedding(Module):
         to `None`.
     """
 
-    num_embeddings: int
-    embedding_dim: int
+    num_embeddings: IntLikeType
+    embedding_dim: IntLikeType
     weight: Tensor
 
     def __init__(
         self,
-        num_embeddings: int,
-        embedding_dim: int,
+        num_embeddings: IntLikeType,
+        embedding_dim: IntLikeType,
         _weight: None | Tensor = None,
-        _freeze: bool = False,
-        device: DeviceType = None,
+        _freeze: BoolLikeType = False,
+        device: None | DeviceType = None,
         dtype: None | Dtype = None,
     ) -> None:
         """Initialise the `Embedding` module with the specified number of
@@ -509,6 +541,7 @@ class Embedding(Module):
 
 
 @set_module("slowtorch.nn.modules.activation")
+@class_dispatch
 class ReLU(Module):
     """Represents a Rectified Linear Unit (ReLU) activation layer.
 
@@ -550,6 +583,7 @@ class ReLU(Module):
 
 
 @set_module("slowtorch.nn.modules.activation")
+@class_dispatch
 class ELU(Module):
     """Represents a Exponential Linear Unit (ELU) activation layer.
 
@@ -563,7 +597,7 @@ class ELU(Module):
     and gradients are propagated only for positive elements.
     """
 
-    def __init__(self, alpha: float = 1.0) -> None:
+    def __init__(self, alpha: FloatLikeType = 1.0) -> None:
         """Initialise the `ELU` module with an alpha value."""
         super().__init__()
         self.alpha = alpha
@@ -588,6 +622,7 @@ class ELU(Module):
 
 
 @set_module("slowtorch.nn.modules.activation")
+@class_dispatch
 class Tanh(Module):
     """Represents a Hyperbolic Tangent (Tanh) activation layer.
 
@@ -624,6 +659,7 @@ class Tanh(Module):
 
 
 @set_module("slowtorch.nn.modules.activation")
+@class_dispatch
 class Sigmoid(Module):
     """Represents a Sigmoid activation layer.
 
@@ -661,6 +697,7 @@ class Sigmoid(Module):
 
 
 @set_module("slowtorch.nn.modules.activation")
+@class_dispatch
 class Softmax(Module):
     """Represents a Softmax activation layer.
 
@@ -677,7 +714,7 @@ class Softmax(Module):
         defaults to `None`.
     """
 
-    def __init__(self, dim: None | int = None) -> None:
+    def __init__(self, dim: None | Dim = None) -> None:
         """Initialise the `Softmax` module."""
         super().__init__()
         self.dim = dim
@@ -703,6 +740,7 @@ class Softmax(Module):
 
 
 @set_module("slowtorch.nn.modules.activation")
+@class_dispatch
 class LogSoftmax(Module):
     """Represents a LogSoftmax activation layer.
 
@@ -714,7 +752,7 @@ class LogSoftmax(Module):
         defaults to `None`.
     """
 
-    def __init__(self, dim: None | int = None) -> None:
+    def __init__(self, dim: None | Dim = None) -> None:
         """Initialise the `LogSoftmax` module."""
         super().__init__()
         self.dim = dim
@@ -741,6 +779,7 @@ class LogSoftmax(Module):
 
 
 @set_module("slowtorch.nn.modules.loss")
+@class_dispatch
 class _Loss(Module):
     """Base class for all loss functions.
 
@@ -764,8 +803,8 @@ class _Loss(Module):
 
     def __init__(
         self,
-        size_average: bool = None,
-        reduce: bool = None,
+        size_average: BoolLikeType = None,
+        reduce: BoolLikeType = None,
         reduction: str = "mean",
     ) -> None:
         """Initialise `_Loss` instance with a reduction strategy."""
@@ -776,6 +815,7 @@ class _Loss(Module):
 
 
 @set_module("slowtorch.nn.modules.loss")
+@class_dispatch
 class MSELoss(_Loss):
     """Mean Squared Error (MSE) Loss module.
 
@@ -799,8 +839,8 @@ class MSELoss(_Loss):
 
     def __init__(
         self,
-        size_average: bool = None,
-        reduce: bool = None,
+        size_average: BoolLikeType = None,
+        reduce: BoolLikeType = None,
         reduction: str = "mean",
     ) -> None:
         """Initialise `MSELoss` instance with a reduction strategy."""
@@ -829,6 +869,7 @@ class MSELoss(_Loss):
 
 
 @set_module("slowtorch.nn.modules.loss")
+@class_dispatch
 class L1Loss(_Loss):
     """Mean Absolute Error (MAE) Loss module.
 
@@ -852,8 +893,8 @@ class L1Loss(_Loss):
 
     def __init__(
         self,
-        size_average: bool = None,
-        reduce: bool = None,
+        size_average: BoolLikeType = None,
+        reduce: BoolLikeType = None,
         reduction: str = "mean",
     ) -> None:
         """Initialise `L1Loss` instance with a reduction strategy."""
@@ -882,6 +923,7 @@ class L1Loss(_Loss):
 
 
 @set_module("slowtorch.nn.modules.loss")
+@class_dispatch
 class NLLLoss(_Loss):
     """Negative Log Likelihood (NLL) Loss module.
 
@@ -905,8 +947,8 @@ class NLLLoss(_Loss):
     def __init__(
         self,
         weight: None | Tensor = None,
-        size_average: bool = None,
-        reduce: bool = None,
+        size_average: BoolLikeType = None,
+        reduce: BoolLikeType = None,
         reduction: str = "mean",
     ) -> None:
         """Initialise `NLLLoss` instance with a reduction strategy."""
@@ -933,7 +975,7 @@ class NLLLoss(_Loss):
         try:
             N, _ = target.shape
         except ValueError:
-            if not all(target >= 0):  # type: ignore[arg-type]
+            if not all(target >= 0):
                 raise IndexError("Target < 0 is out of bounds")
             return slowtorch.nn.functional.nll_loss(
                 input, target, self.reduction
@@ -946,6 +988,7 @@ class NLLLoss(_Loss):
 
 
 @set_module("slowtorch.nn.modules.loss")
+@class_dispatch
 class CrossEntropyLoss(_Loss):
     """Cross Entropy Loss module.
 
@@ -974,8 +1017,8 @@ class CrossEntropyLoss(_Loss):
     def __init__(
         self,
         weight: None | Tensor = None,
-        size_average: bool = None,
-        reduce: bool = None,
+        size_average: BoolLikeType = None,
+        reduce: BoolLikeType = None,
         reduction: str = "mean",
     ) -> None:
         """Initialise `CrossEntropyLoss` instance with a reduction
@@ -1005,7 +1048,7 @@ class CrossEntropyLoss(_Loss):
         try:
             N, _ = target.shape
         except ValueError:
-            if not all(target >= 0):  # type: ignore[arg-type]
+            if not all(target >= 0):
                 raise IndexError("Target < 0 is out of bounds")
             return slowtorch.nn.functional.cross_entropy(
                 input, target, self.reduction
