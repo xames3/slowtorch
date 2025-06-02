@@ -4,7 +4,7 @@ SlowTorch
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Friday, May 02 2025
+Last updated on: Sunday, June 01 2025
 
 SlowTorch is yet another personal pet-project of mine where I tried and
 implemented the basic and bare-bones functionality of PyTorch just using
@@ -36,7 +36,10 @@ from __future__ import annotations
 
 import typing as t
 
-import slowtorch._types as types
+import slowtorch.internal as internal
+
+if t.TYPE_CHECKING:
+    from slowtorch import types
 
 __all__: list[str] = [
     "function_dispatch",
@@ -47,12 +50,12 @@ __all__: list[str] = [
     "version",
 ]
 
-_T = t.TypeVar("_T")
+T = t.TypeVar("T")
 
-version: str = "31.5.2025"
+version: str = "30.6.2025"
 
 
-def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:
+def function_dispatch(func: t.Callable[..., T]) -> t.Callable[..., T]:
     """Decorator to register a function in the global namespace.
 
     This utility allows for automatic exposure of decorated functions to
@@ -68,13 +71,16 @@ def function_dispatch(func: t.Callable[..., _T]) -> t.Callable[..., _T]:
     return func
 
 
-from ._tensor import *
-from ._utils import *
-from ._variable_functions import *
+from .internal.dtype import *
+from .internal.tensor import *
+from .ops.creation import *
+from .ops.mutation import *
+from .ops.random import *
+from .utils import *
 
-__all__ += _tensor.__all__
-__all__ += _utils.__all__
+__all__ += internal.dtype.__all__
+__all__ += utils.__all__
 
-import slowtorch._random as random
+import slowtorch.internal.random as random
 import slowtorch.nn as nn
 import slowtorch.optim as optim
