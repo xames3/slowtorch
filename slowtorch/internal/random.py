@@ -1,10 +1,12 @@
 """\
-SlowTorch Random API
-====================
+SlowTorch Random
+================
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Monday, January 13 2025
-Last updated on: Tuesday, April 01 2025
+Last updated on: Sunday, June 01 2025
+
+All things random.
 
 This module implements pseudo-random number generators (PRNGs or RNGs)
 with ability to draw samples from a variety of probability
@@ -14,11 +16,15 @@ distributions.
 from __future__ import annotations
 
 import random
+import typing as t
 
 from slowtorch import function_dispatch
-from slowtorch._tensor import DeviceType
-from slowtorch._tensor import IntLikeType
-from slowtorch._tensor import Tensor
+from slowtorch import tensor
+
+if t.TYPE_CHECKING:
+    from slowtorch.types import DeviceType
+    from slowtorch.types import IntLikeType
+    from slowtorch.types import Tensor
 
 
 @function_dispatch
@@ -44,8 +50,6 @@ class Generator:
 
         :return: State of RNG as a `slowtorch.Tensor`.
         """
-        from slowtorch._variable_functions import tensor
-
         return tensor(self.internal.getstate())
 
     def set_state(self, state: tuple[IntLikeType, ...]) -> None:

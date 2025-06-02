@@ -57,7 +57,16 @@ warn_unused_configs = true
 check_untyped_defs = true
 disallow_incomplete_defs = true
 ignore_missing_imports = true
-disable_error_code = [ "attr-defined", "call-overload", "index", "union-attr", "unreachable" ]
+disable_error_code = [
+  "attr-defined",
+  "call-overload",
+  "index",
+  "no-any-return",
+  "operator",
+  "override",
+  "union-attr",
+  "unreachable",
+]
 
 [[tool.mypy.overrides]]
 module = [
@@ -107,9 +116,9 @@ deps = [
   "typing_extensions",
 ]
 commands = [
-  [ "black", "-q", {replace = "posargs", default = ["slowtorch/"], extend = true}, "--line-length", "79" ],
-  [ "flake8", {replace = "posargs", default = ["slowtorch/"], extend = true}, "--per-file-ignores", "__init__.py:F403,F405,E402", "--ignore", "E203,W503" ],
   [ "isort", "--sl", {replace = "posargs", default = ["slowtorch/"], extend = true} ],
+  [ "black", "-q", {replace = "posargs", default = ["slowtorch/"], extend = true}, "--line-length", "79" ],
   [ "mypy", {replace = "posargs", default = ["slowtorch/"], extend = true} ],
+  [ "flake8", {replace = "posargs", default = ["slowtorch/"], extend = true}, "--per-file-ignores", "__init__.py:F403,F405,E402", "--ignore", "E203,E704,W503" ],
   [ "pytest", "-v", "-rA", "--tb=short" ]
 ]

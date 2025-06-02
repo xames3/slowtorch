@@ -1,29 +1,26 @@
 """\
-SlowTorch Tensor API
-====================
+SlowTorch Tensor
+================
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Tuesday, January 07 2025
-Last updated on: Saturday, May 31 2025
+Last updated on: Sunday, June 01 2025
 
 Tensor object.
 
 This module provides the foundational classes and functions for tensor
-operations in SlowTorch. It defines the `Tensor` class and supporting
+operations in this library. It defines the `Tensor` class and supporting
 utility like the `tensor` function to create and manipulate tensors.
 SlowTorch aims to mimic PyTorch's tensor behavior while implementing key
 functionalities from scratch to foster learning and customisation.
 
-The `Tensor` class acts as the primary data structure for
-multidimensional arrays and supports features like automatic
-differentiation, and flexible data types. Whereas, the `tensor` function
-is a factory function to create tensors from nested data structures. It
-infers tensor shape, data type, and supports optional device
-specification and gradient requirements. Designed with flexibility,
-efficiency, and modularity in mind, the `Tensor` class aims to
-replicate and innovate upon the core features of PyTorch tensors while
-emphasising a Python-standard-library-only approach. Additionally, the
-class introduces a Pythonic, educational perspective, making it suitable
+The central `Tensor` class acts as the primary data structure for
+multidimensional tensors and supports features like automatic
+differentiation, and flexible data types. Designed with flexibility,
+efficiency, and modularity in mind, the `Tensor` class aims to replicate
+and innovate upon the core features of PyTorch tensors while emphasising
+a Python-standard-library-only approach. Additionally, the class
+introduces a Pythonic, educational perspective, making it suitable
 for learning and experimentation with tensor mechanics without relying
 on external libraries.
 
@@ -32,13 +29,13 @@ The module supports features such as::
     - The primary `Tensor` object supports auto-differentiation.
     - Efficient storage and representation of n-dimensional data.
     - Flexible shape manipulation, including reshaping and broadcasting.
+    - Slicing and indexing support for intuitive data access.
     - Element-wise operations, including arithmetic, logical, and
       comparison operations, via rich operator overloading.
-    - Slicing and indexing support for intuitive data access.
     - Conversion utilities to export data to native Python types
       (e.g., lists).
-    - Tensor based operations such as unsqueezing, clamping, reshaping,
-      transposing, cloning, etc.
+    - Tensor based operations such as unsqueezing, reshaping, cloning,
+      transposing, etc.
     - Linear algebraic operations such as calulating maximum, minimum,
       mean, standard deviation, exponent, log, square root etc.
 
@@ -48,11 +45,6 @@ for educational purposes and to meet the constraints of pure Python. By
 eschewing C or Cython extensions, the `Tensor` class offers an
 accessible implementation that emphasises algorithmic clarity over raw
 performance.
-
-In addition to the core `Tensor` functionality, this module
-introduces several helper functions to aid in tensor manipulation and
-generation. These functions are designed to complement the `Tensor`
-class and mimic key functionality found in PyTorch.
 
 While this module implements many fundamental features of `Tensor`,
 it does not aim to match PyTorch's performance or breadth. Instead, the
@@ -64,9 +56,7 @@ from __future__ import annotations
 
 import builtins
 import ctypes
-import math
-import pickle
-import types
+import functools
 import typing as t
 from collections import OrderedDict
 from collections.abc import Iterable
@@ -74,363 +64,36 @@ from itertools import product as pdt
 
 import slowtorch
 from slowtorch import function_dispatch
-from slowtorch._types import BoolLikeType
-from slowtorch._types import FileLike
-from slowtorch._types import FloatLikeType
-from slowtorch._types import IndexLike
-from slowtorch._types import IntLikeType
-from slowtorch._types import Scalar
-from slowtorch._utils import set_module
-
-__all__: list[str] = [
-    "bool",
-    "double",
-    "float32",
-    "float64",
-    "int16",
-    "int32",
-    "int64",
-    "int8",
-    "long",
-    "short",
-    "uint16",
-    "uint32",
-    "uint64",
-    "uint8",
-]
-
-py_impl_int = builtins.int
-py_impl_bool = builtins.bool
-py_impl_min = builtins.min
-py_impl_max = builtins.max
-py_impl_sorted = builtins.sorted
-py_impl_round = builtins.round
-py_impl_sum = builtins.sum
-
-
-class PrinterOptions:
-    """Printer options to mimic PyTorch's way."""
-
-    precision: IntLikeType = 4
-
-
-@set_module("slowtorch")
-@function_dispatch
-class Device:
-    """Represent a computational device for executing Tensor operations.
-
-    The `Device` class in SlowTorch encapsulates the concept of a
-    computation backend, such as `cpu`. It provides a way to specify the
-    target device where Tensor computations will occur, including
-    support for multi-device systems using an optional device index.
-
-    This abstraction allows users to explicitly manage computational
-    resources, mimicking PyTorch's `torch.device` behavior.
-
-    :param type: The type of the device, defaults to `cpu`.
-    :param index: An optional index representing the device number,
-        defaults to 0.
-    """
-
-    __qualname__: str = "device"
-
-    def __init__(self, type: str = "cpu", index: IntLikeType = 0) -> None:
-        """Initialise a new `Device` object with default index."""
-        self.type = type
-        self.index = index
-
-    def __repr__(self) -> str:
-        """Return a string representation of the `Device` object."""
-        return f"device(type={self.type!r}, index={self.index})"
-
-    def __str__(self) -> str:
-        """Return a human-readable string representation."""
-        return f"{self.type}:{self.index}"
-
-
-@set_module("slowtorch")
-@function_dispatch
-class Dtype:
-    """Represent data types used in the SlowTorch framework.
-
-    The `Dtype` class encapsulates information about supported datatypes
-    for tensor operations and storage in SlowTorch. It provides a way to
-    describe the type of data stored in tensors, its size in bytes, and
-    associated metadata.
-
-    :param name: The full name of the datatype.
-    :param short: A shorthand representation of the datatype, where the
-        last character specifies the size in bytes.
-    :param data: A representation of the type's data structure or
-        internal details.
-    :param value: A representative value for the data type, used for
-        internal operations or comparisons.
-    :param typename: A `typename` similar to PyTorch tensors.
-    """
-
-    __qualname__: str = "dtype"
-
-    def __init__(
-        self,
-        name: str,
-        short: str,
-        data: t.Any,
-        value: Scalar,
-        typename: str,
-    ) -> None:
-        """Initialise a new `Dtype` object with name and value."""
-        self.name = name
-        self.itemsize = int(short[-1])
-        self.data = data
-        self.value = value
-        self.typename = typename
-
-    def __repr__(self) -> str:
-        """Return a string representation of the `Dtype` object."""
-        return f"slowtorch.{self.name}"
-
-
-@function_dispatch
-class Size(tuple[IntLikeType, ...]):
-    """Represent the shape of a tensor as a tuple of integers.
-
-    This class extends the built-in tuple to provide a clear and
-    descriptive representation for tensor dimensions.
-
-    :param iterable: A tuple representing the dimensions of the tensor.
-    """
-
-    def __init__(self, iterable: tuple[IntLikeType, ...]) -> None:
-        """Initialise a `Size` instance with some iterable."""
-        if not all(isinstance(dim, int) and dim >= 0 for dim in iterable):
-            raise ValueError("Dimensions must be non-negative")
-        self.iterable = iterable
-
-    def __repr__(self) -> str:
-        """Return a string representation of the `Size` object."""
-        return f"slowtorch.{type(self).__qualname__}({list(self.iterable)})"
-
-    def numel(self) -> IntLikeType:
-        """Return total number of elements a tensor would contain."""
-        return numel(self.iterable)
-
-
-DeviceType: t.TypeAlias = str | IntLikeType | Device
-ShapeType: t.TypeAlias = Size | tuple[IntLikeType, ...]
-StrideType: t.TypeAlias = list[IntLikeType] | tuple[IntLikeType, ...]
-Dim: t.TypeAlias = IntLikeType
-
-supported_dtypes: tuple[Dtype, ...] = (
-    (bool := Dtype("bool", "b1", ctypes.c_bool, False, "BoolTensor")),
-    (int8 := Dtype("int8", "i1", ctypes.c_int8, 0, "CharTensor")),
-    (uint8 := Dtype("uint8", "u1", ctypes.c_uint8, 0, "ByteTensor")),
-    (int16 := Dtype("int16", "i2", ctypes.c_int16, 0, "ShortTensor")),
-    (uint16 := Dtype("uint16", "u2", ctypes.c_uint16, 0, "UShortTensor")),
-    (int32 := Dtype("int32", "i4", ctypes.c_int32, 0, "IntTensor")),
-    (uint32 := Dtype("uint32", "u4", ctypes.c_uint32, 0, "UIntTensor")),
-    (int64 := Dtype("int64", "i8", ctypes.c_int64, 0, "LongTensor")),
-    (uint64 := Dtype("uint64", "u8", ctypes.c_uint64, 0, "ULongTensor")),
-    (float32 := Dtype("float32", "f4", ctypes.c_float, 0.0, "FloatTensor")),
-    (float64 := Dtype("float64", "f8", ctypes.c_double, 0.0, "DoubleTensor")),
-)
-
-double = float64
-short = int16
-long = int64
-
-for dtype in supported_dtypes:
-    globals()[dtype] = dtype
-
-
-@function_dispatch
-def set_printoptions(precision: None | IntLikeType = None) -> None:
-    """Set options for printing."""
-    from slowtorch._tensor import Tensor
-
-    if precision is None:
-        precision = 4
-    Tensor._print_opts.precision = precision
-
-
-@function_dispatch
-def infer_size_shapes(data: Input) -> Size:
-    """Infer the shape of a nested iterable structure and represent it
-    as a Tensor.
-
-    This function recursively determines the dimensions of a nested
-    structure (e.g., a list of lists) and converts it into a tuple of
-    integers representing the corresponding Tensor shape.
-
-    :param data: A nested iterable structure that can be converted
-        into a Tensor. Each level of nesting corresponds to a dimension
-        in the shape.
-    :return: A tuple of integers representing the shape of the input
-        data.
-    """
-    shape: ShapeType = []
-
-    def infer_size(input: Input, numel: IntLikeType) -> None:
-        """Helper function to calculate shape recursively."""
-        if isinstance(input, t.Sized) and not isinstance(input, (str, bytes)):
-            if len(shape) <= numel:
-                shape.append(0)
-            length = len(input)
-            if length > shape[numel]:
-                shape[numel] = length
-            for element in input:
-                infer_size(element, numel + 1)
-
-    infer_size(data, 0)
-    return Size(tuple(shape))
-
-
-@function_dispatch
-def make_contiguous_strides(shape: ShapeType, itemsize: IntLikeType) -> Size:
-    """Calculate memory strides for traversing a Tensor in row-major
-    order.
-
-    Strides represent the number of bytes required to move in memory
-    between successive elements along each dimension of a Tensor. This
-    function computes strides assuming a row-major (C-style) memory
-    layout, where elements in the last dimension are stored
-    contiguously.
-
-    :param shape: A sequence of integers representing the dimensions of
-        the Tensor. Each integer specifies the size along a particular
-        dimension.
-    :param itemsize: An integer specifying the size (in bytes) of each
-        Tensor element. This depends on the data type of the Tensor.
-    :return: A tuple of integers representing the memory strides for
-        each dimension of the Tensor, in bytes.
-
-    .. note::
-
-        [1] Strides are critical for indexing Tensors efficiently and
-            correctly.
-        [2] Row-major order ensures that the last dimension changes the
-            fastest in memory.
-    """
-    strides: StrideType = []
-    stride: IntLikeType = itemsize
-    for dim in reversed(shape):
-        strides.append(stride)
-        stride *= dim
-    return Size(tuple(reversed(strides)))
-
-
-@function_dispatch
-def numel(shape: t.Sequence[IntLikeType] | IntLikeType) -> IntLikeType:
-    """Calculate the total number of elements in a Tensor based on its
-    shape.
-
-    The total number of elements in a Tensor is the product of its
-    dimensions, determined by multiplying the shape along each axis.
-
-    :param shape: An integer or sequence of integers representing the
-        dimensions of the Tensor. Each integer specifies the size along a
-        particular dimension.
-    :return: An integer representing the total number of elements in
-        the Tensor.
-    """
-    if not isinstance(shape, Iterable):
-        shape = (shape,)
-    return math.prod(shape)
-
-
-@function_dispatch
-def get_step(view: Tensor) -> IntLikeType:
-    """Calculate the step size for traversing a Tensor along its last
-    dimension.
-
-    The step size determines the number of memory elements to skip when
-    moving to the next index along the last axis of the Tensor. If the
-    Tensor is C-contiguous (row-major layout), the step size is 1.
-    Non-contiguous Tensors return a step size of 0.
-
-    :param view: A Tensor object with attributes `shape`, `strides`, and
-        `itemsize`, representing its memory layout.
-    :return: An integer step size: 1 for C-contiguous Tensors, 0
-        otherwise.
-    """
-    contiguous = make_contiguous_strides(view.shape, view.itemsize)
-    step = view._strides[-1] // contiguous[-1]
-    strides = tuple(stride * step for stride in contiguous)
-    return step if view._strides == strides else 0
-
-
-@function_dispatch
-def check_same_shape(args: Tensor) -> BoolLikeType:
-    """Check if a nested iterable structure can form a Tensor with a
-    uniform shape.
-
-    A structure has a uniform shape if::
-
-        - All elements along the same axis have the same shape.
-        - Sub-elements (if any) also follow uniformity.
-
-    :param args: A nested iterable structure to validate for Tensor
-        compatibility.
-    :return: True if the structure has a uniform shape, otherwise False.
-    """
-    if not isinstance(args, t.Iterable):
-        return True
-    return (
-        all(check_same_shape(arg) for arg in args)
-        and len(set(len(arg) for arg in args if isinstance(arg, t.Sized))) <= 1
-    )
-
-
-@set_module("slowtorch")
-@function_dispatch
-def broadcast_shapes(input: Size, other: Size) -> ShapeType:
-    """Calculate the broadcast-compatible shape for two tensors.
-
-    This function aligns the two shapes from the right, padding the
-    smaller shape with `1`s on the left. Then, it checks compatibility
-    for broadcasting::
-
-        - Each tensor has at least one dimension.
-        - Dimension sizes must either be equal, one of them is 1 or
-          one of them does not exist.
-
-    :param input: Shape of the first tensor.
-    :param other: Shape of the second tensor.
-    :return: The broadcast-compatible shape.
-    :raises ValueError: If the shapes are incompatible for broadcasting.
-    """
-    shape: ShapeType = []
-    r_input = list(reversed(input))
-    r_other = list(reversed(other))
-    maximum = max(len(r_input), len(r_other))
-    r_input += [1] * (maximum - len(r_input))
-    r_other.extend([1] * (maximum - len(r_other)))
-    for idx, jdx in zip(r_input, r_other):
-        if idx == jdx or idx == 1 or jdx == 1:
-            shape.append(max(idx, jdx))
-        else:
-            raise ValueError(
-                f"Operands couldn't broadcast together with shapes {input} "
-                f"and {other}"
-            )
-    return tuple(reversed(shape))
-
-
-def unravel_index(
-    indices: IntLikeType,
-    shape: ShapeType,
-) -> ShapeType:
-    """Convert a tensor of flat indices into a multi-dimensional
-    index for a given shape.
-
-    :param indices: Index position to unravel.
-    :param shape: The shape of the tensor.
-    :return: A tuple representing the multi-dimensional index.
-    """
-    size: ShapeType = []
-    for dim in reversed(shape):
-        size.append(indices % dim)
-        indices = indices // dim
-    return tuple(reversed(size))
+from slowtorch.internal.device import device as Device
+from slowtorch.internal.dtype import bool as bool_
+from slowtorch.internal.dtype import float32
+from slowtorch.internal.dtype import float64
+from slowtorch.internal.dtype import int64
+from slowtorch.internal.shape import get_step
+from slowtorch.internal.shape import make_contiguous_strides
+from slowtorch.internal.shape import numel
+from slowtorch.internal.shape import size as Size
+from slowtorch.internal.shape import unravel_index
+from slowtorch.utils import PrinterOptions
+from slowtorch.utils import set_module
+
+if t.TYPE_CHECKING:
+    from slowtorch.types import BoolLikeType
+    from slowtorch.types import DeviceType
+    from slowtorch.types import Dim
+    from slowtorch.types import Dtype
+    from slowtorch.types import FloatLikeType
+    from slowtorch.types import IndexLike
+    from slowtorch.types import Input
+    from slowtorch.types import IntLikeType
+    from slowtorch.types import Scalar
+    from slowtorch.types import ShapeType
+    from slowtorch.types import StorageWeakRef
+    from slowtorch.types import StrideType
+    from slowtorch.types import TensorOrTensors
+
+
+PRINT_OPTS = PrinterOptions()
 
 
 @set_module("slowtorch.autograd")
@@ -468,9 +131,6 @@ class Node:
         return self.backward.__name__ if self.backward else ""
 
 
-PRINT_OPTS = PrinterOptions()
-
-
 @set_module("slowtorch")
 @function_dispatch
 class Tensor:
@@ -494,31 +154,15 @@ class Tensor:
         defaults to 0.
     :param strides: Memory strides for each dimension, defaults
         to `None`.
-    :raises RuntimeError: If an unsupported device is specified.
     :raises ValueError: If invalid strides or offsets are provided.
     """
 
     _print_opts = PRINT_OPTS
-    __slots__ = (
-        "_base",
-        "_cached_sizes_strides_offsets",
-        "_dtype",
-        "_itemsize",
-        "_shape",
-        "_storage_offset",
-        "_strides",
-        "data",
-        "device",
-        "grad",
-        "grad_fn",
-        "requires_grad",
-        "storage",
-    )
 
     def __init__(
         self,
         shape: ShapeType | IntLikeType,
-        dtype: None | Dtype = float32,
+        dtype: None | Dtype = None,
         device: None | DeviceType = None,
         requires_grad: BoolLikeType = False,
         storage: None | str | ctypes._CData | Tensor = None,
@@ -526,23 +170,13 @@ class Tensor:
         strides: None | StrideType = None,
     ) -> None:
         """Initialise a `tensor` object from provided shape."""
-        if device is not None and device.type != "cpu":
-            raise RuntimeError(
-                f"{type(self).__qualname__} supports only device type: cpu"
-            )
         self.device = device or Device()
         self.requires_grad = requires_grad
         if not isinstance(shape, Iterable):
             shape = (shape,)
-        self._shape = tuple(py_impl_int(dim) for dim in shape)
+        self._shape = tuple(int(dim) for dim in shape)
         if dtype is None:
             dtype = float32
-        elif isinstance(dtype, type):
-            dtype = globals()[
-                f"{dtype.__name__}{'32' if dtype == float else ''}"
-            ]
-        else:
-            dtype = globals()[dtype]
         self._dtype = dtype
         self._itemsize = self._dtype.itemsize
         self._storage_offset = offset
@@ -567,7 +201,7 @@ class Tensor:
                 strides = make_contiguous_strides(self._shape, self._itemsize)
             elif not (
                 isinstance(strides, tuple)
-                and all(isinstance(stride, py_impl_int) for stride in strides)
+                and all(isinstance(stride, int) for stride in strides)
                 and len(strides) == len(self._shape)
             ):
                 raise ValueError("Invalid strides provided")
@@ -585,6 +219,10 @@ class Tensor:
         self.data = self
         self.grad_fn: Node = Node()
         self.grad: Tensor = None
+        self._cached_sizes_strides_offsets: dict[
+            tuple[IntLikeType, str],
+            tuple[ShapeType, StrideType, IntLikeType],
+        ] = {}
 
     def format_repr(
         self,
@@ -606,7 +244,7 @@ class Tensor:
             else:
                 element = str(value)
             return element.rjust(whitespace)
-        indent = py_impl_min(2, py_impl_max(0, (self.ndim - dimension - 1)))
+        indent = min(2, max(0, (self.ndim - dimension - 1)))
         if dimension < len(self._shape):
             formatted += "["
             for idx in range(self._shape[dimension]):
@@ -653,9 +291,7 @@ class Tensor:
 
         whitespace = 0
         if self.storage:
-            whitespace = py_impl_max(
-                len(fmt_data(value)) for value in self.storage
-            )
+            whitespace = max(len(fmt_data(value)) for value in self.storage)
         is_scalar = len(self.storage) == 1
         formatted = self.format_repr(
             formatted="",
@@ -675,7 +311,7 @@ class Tensor:
                     extra_repr = ", requires_grad=True"
             except AttributeError:
                 extra_repr = ", requires_grad=True"
-        if self.dtype not in (float32, float64, int64, bool):
+        if self.dtype not in (float32, float64, int64, bool_):
             return f"tensor({formatted}, dtype={self.dtype}{extra_repr})"
         return f"tensor({formatted}{extra_repr})"
 
@@ -705,7 +341,7 @@ class Tensor:
         :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
-            return py_impl_int(self.storage[self._storage_offset])
+            return int(self.storage[self._storage_offset])
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
@@ -720,7 +356,7 @@ class Tensor:
         :raises TypeError: If tensor is not of size 1.
         """
         if self.nelement() == 1:
-            return py_impl_bool(self.storage[self._storage_offset])
+            return bool(self.storage[self._storage_offset])
         else:
             raise TypeError("Only tensor of size 1 can be converted to scalar")
 
@@ -759,7 +395,7 @@ class Tensor:
             return
         stride_units = [stride // itemsize for stride in strides]
         for index in pdt(*[range(dim) for dim in shape]):
-            offset = storage_offset + py_impl_sum(
+            offset = storage_offset + sum(
                 idx * sdx for idx, sdx in zip(index, stride_units)
             )
             yield storage[offset]
@@ -811,13 +447,9 @@ class Tensor:
             indices = pre + (slice(None),) * count + post
         if len(indices) < len(self._shape):
             indices += (slice(None),) * (len(self._shape) - len(indices))
-        if any(isinstance(kdx, py_impl_bool) for kdx in indices):
+        if any(isinstance(kdx, bool) for kdx in indices):
             indices = tuple(
-                (
-                    py_impl_int(index)
-                    if isinstance(index, py_impl_bool)
-                    else index
-                )
+                (int(index) if isinstance(index, bool) else index)
                 for index in indices
             )
         size, strides, storage_offset = (
@@ -868,7 +500,7 @@ class Tensor:
         if not size:
             self.storage[storage_offset] = value
             return
-        if isinstance(value, Scalar):
+        if isinstance(value, (int, bool, float)):
             source = [value] * nelement
         elif isinstance(value, Iterable) and not isinstance(value, Tensor):
             source = list(value)
@@ -893,9 +525,9 @@ class Tensor:
         if current_offset == 1:
             layout = [
                 (
-                    py_impl_int(element)
+                    int(element)
                     if not self.dtype.name.startswith(("float", "bool"))
-                    else py_impl_round(element, self._print_opts.precision)
+                    else round(element, self._print_opts.precision)
                 )
                 for element in source
             ]
@@ -908,6 +540,30 @@ class Tensor:
             ] = layout
         else:
             self.set_(source, storage_offset, size, strides)
+
+    def __getattr__(self, name: str) -> functools.partial[t.Any]:
+        """Lazily resolves and registers missing methods`.
+
+        If an attribute `name` is not found on the current instance,
+        this method attempts to fetch a callable with the same name from
+        the `slowtorch.nn.functional` module. If such a function exists,
+        it is wrapped with `functools.partial` thereby emulating
+        method-like behaviour.
+
+        This pattern supports delayed registration of functional-style
+        operations, keeping the core tensor class lightweight while
+        allowing dynamic extensibility.
+
+        :param name: The name of the attribute being accessed.
+        :return: The existing attribute if present, or a lazily-bound
+            function if resolved.
+        """
+        if name in self.__dict__:
+            return self.__dict__[name]
+        else:
+            from slowtorch.nn import functional
+
+            return functools.partial(getattr(functional, name), self)
 
     def compute_sizes_strides_storage_offset(
         self,
@@ -928,11 +584,6 @@ class Tensor:
         """
         if isinstance(key, list):
             key = tuple(key)
-        if not hasattr(self, "_cached_sizes_strides_offsets"):
-            self._cached_sizes_strides_offsets: dict[
-                tuple[IntLikeType, str],
-                tuple[ShapeType, StrideType, IntLikeType],
-            ] = {}
         cache = (id(self), repr(key))
         if cache in self._cached_sizes_strides_offsets:
             return self._cached_sizes_strides_offsets[cache]
@@ -1179,8 +830,8 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Scalar):
+        new_tensor = Tensor(self._shape, bool_)
+        if isinstance(other, (int, bool, float)):
             new_tensor[:] = (x < other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1212,8 +863,8 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Scalar):
+        new_tensor = Tensor(self._shape, bool_)
+        if isinstance(other, (int, bool, float)):
             new_tensor[:] = (x > other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1245,8 +896,8 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Scalar):
+        new_tensor = Tensor(self._shape, bool_)
+        if isinstance(other, (int, bool, float)):
             new_tensor[:] = (x <= other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1278,8 +929,8 @@ class Tensor:
         :raises ValueError: If `other` is a tensor but its shape
             doesn't match `self.shape`.
         """
-        new_tensor = Tensor(self._shape, bool)
-        if isinstance(other, Scalar):
+        new_tensor = Tensor(self._shape, bool_)
+        if isinstance(other, (int, bool, float)):
             new_tensor[:] = (x >= other for x in self.storage)
         elif isinstance(other, Tensor):
             if self._shape != other.shape:
@@ -1538,7 +1189,7 @@ class Tensor:
 
     def element_size(self) -> IntLikeType:
         """Return the size, in bytes, of each tensor element."""
-        return py_impl_int(self._itemsize)
+        return int(self._itemsize)
 
     itemsize = property(element_size)
 
@@ -1656,7 +1307,7 @@ class Tensor:
 
     def bool(self) -> Tensor:
         """Return tensor with bool dtype."""
-        return self.to(bool)
+        return self.to(bool_)
 
     def _view(self) -> Tensor:
         """Create a new view of the tensor.
@@ -1740,7 +1391,7 @@ class Tensor:
                 (
                     flatten(prefix + (index,))
                     if dimensions + 1 < self.ndim
-                    else self[prefix + (index,)].item()
+                    else self[prefix + (index,)]
                 )
                 for index in range(self._shape[dimensions])
             ]
@@ -1756,12 +1407,6 @@ class Tensor:
                 f"Tensor with {self.nelement()} elements cannot be"
                 " converted to scalar"
             )
-
-    def ravel(self) -> Tensor:
-        """Return a copy of the tensor collapsed into one dimension."""
-        return slowtorch.nn.functional.ravel(self)
-
-    flatten = ravel
 
     def as_strided(self, size: ShapeType, strides: StrideType) -> Tensor:
         """Create a new view of the tensor with the specified shape and
@@ -1783,22 +1428,10 @@ class Tensor:
         new_tensor.grad_fn = self.grad_fn
         new_tensor.requires_grad = self.requires_grad
         new_tensor.storage = self.storage
+        new_tensor._cached_sizes_strides_offsets = (
+            self._cached_sizes_strides_offsets
+        )
         return new_tensor
-
-    def transpose(self, dim0: IntLikeType, dim1: IntLikeType) -> Tensor:
-        """Transpose the tensor by permuting its dimensions.
-
-        This method returns a view of the tensor with its dimensions
-        permuted. If no dimensions are specified, the dimensions are
-        reversed (i.e., equivalent to a full transpose).
-
-        :param dim0: First dimension to be transposed.
-        :param dim1: Second dimension to be transposed.
-        :return: A new tensor view with transposed dimensions.
-        """
-        return slowtorch.nn.functional.transpose(self, dim0, dim1)
-
-    swapaxes = swapdims = transpose
 
     def t(self) -> Tensor:
         """Transpose dimensions 0 and 1."""
@@ -1815,7 +1448,7 @@ class Tensor:
         """
         storage = list(self)
         unique = set(storage)
-        values = py_impl_sorted(unique) if sorted else storage
+        values = builtins.sorted(unique) if sorted else storage
         new_tensor = Tensor(
             shape=len(values),
             dtype=self.dtype,
@@ -1824,15 +1457,6 @@ class Tensor:
         )
         new_tensor[:] = values
         return new_tensor
-
-    def neg(self) -> Tensor:
-        """Compute negative of the elements.
-
-        :return: Tensor with negative of the input elements.
-        """
-        return self.__mul__(-1)
-
-    negative = neg
 
     def fill_(self, value: Scalar) -> Tensor:
         """Fill the entire tensor with a scalar value.
@@ -1851,7 +1475,7 @@ class Tensor:
             [2] The method uses slicing (`self[:] = value`) to
                 efficiently set all elements to the specified value.
         """
-        if not isinstance(value, Scalar):
+        if not isinstance(value, (int, bool, float)):
             raise ValueError("Value must be an integer or a float")
         self[:] = value
         return self
@@ -1970,358 +1594,3 @@ class Tensor:
         )
         new_tensor._base = self
         return new_tensor
-
-    def log(self) -> Tensor:
-        """Return a new tensor with the natural log of the elements of
-        input.
-
-        This method creates a new `Tensor` instance with the same shape
-        and as the original tensor but with natural log calculated.
-
-        :return: A new tensor with the log calculated data and shape.
-        """
-        return slowtorch.nn.functional.log(self)
-
-    def clone(self) -> Tensor:
-        """Return a deep copy of the tensor.
-
-        This method creates a new `Tensor` instance with the same data,
-        shape, and type as the original tensor. The copy is independent
-        of the original, meaning changes to the copy do not affect the
-        original tensor.
-
-        :return: A new tensor with the same data, shape, and type as the
-            original tensor.
-
-        .. note::
-
-            [1] This method ensures that both the data and metadata of
-                the tensor are duplicated.
-            [2] The `to` method is used internally for copying, ensuring
-                consistency and type fidelity.
-        """
-        return slowtorch.nn.functional.clone(self)
-
-    def sum(
-        self,
-        dim: None | Dim = None,
-        keepdim: BoolLikeType = False,
-    ) -> Tensor:
-        """Compute the sum of elements in the tensor across a specified
-        dimension.
-
-        This method computes the sum of all elements in the tensor if no
-        dimension is provided. If a dimension is specified, the method
-        reduces the tensor along the given dimension while optionally
-        retaining the reduced dimensions.
-
-        :param dim: The dimension along which to compute the sum,
-            defaults to `None`. For `None`, the sum is computed over all
-            elements of the tensor.
-        :param keepdim: A boolean indicating whether to retain the
-            reduced dimensions in the resulting tensor, defaults to
-            `False`.
-        :return: A new tensor containing the sum of the specified
-            elements.
-        """
-        return slowtorch.nn.functional.sum(self, dim, keepdim)
-
-    def max(
-        self,
-        dim: None | Dim = None,
-        keepdim: BoolLikeType = False,
-    ) -> Tensor:
-        """Return the maximum of elements in the tensor across a
-        specified dimension.
-
-        This method returns the maximum of all elements in the tensor if
-        no dimension is provided. If a dimension is specified, the method
-        reduces the tensor along the given dimension while optionally
-        retaining the reduced dimensions.
-
-        :param dim: The dimension along which to compute the maximum,
-            defaults to `None`. For `None`, the maximum is computed over
-            all elements of the tensor.
-        :param keepdim: A boolean indicating whether to retain the
-            reduced dimensions in the resulting tensor, defaults to
-            `False`.
-        :return: A new tensor containing the maximum of the specified
-            elements.
-        """
-        return slowtorch.nn.functional.max(self, dim, keepdim)
-
-    def min(
-        self,
-        dim: None | Dim = None,
-        keepdim: BoolLikeType = False,
-    ) -> Tensor:
-        """Return the minimum of elements in the tensor across a
-        specified dimension.
-
-        This method returns the minimum of all elements in the tensor if
-        no dimension is provided. If a dimension is specified, the method
-        reduces the tensor along the given dimension while optionally
-        retaining the reduced dimensions.
-
-        :param dim: The dimension along which to compute the minimum,
-            defaults to `None`. For `None`, the minimum is computed over
-            all elements of the tensor.
-        :param keepdim: A boolean indicating whether to retain the
-            reduced dimensions in the resulting tensor, defaults to
-            `False`.
-        :return: A new tensor containing the minimum of the specified
-            elements.
-        """
-        return slowtorch.nn.functional.min(self, dim, keepdim)
-
-    def mean(
-        self,
-        dim: None | Dim = None,
-        keepdim: BoolLikeType = False,
-    ) -> Tensor:
-        """Compute the mean of elements in the tensor across a specified
-        dimension.
-
-        This method computes the mean of all elements in the tensor if
-        no dimension is provided. If a dimension is specified, the method
-        reduces the tensor along the given dimension while optionally
-        retaining the reduced dimensions.
-
-        :param dim: The dimension along which to compute the mean,
-            defaults to `None`. For `None`, the mean is computed over
-            all elements of the tensor.
-        :param keepdim: A boolean indicating whether to retain the
-            reduced dimensions in the resulting tensor, defaults to
-            `False`.
-        :return: A new tensor containing the mean of the specified
-            elements.
-        """
-        return slowtorch.nn.functional.mean(self, dim, keepdim)
-
-    def std(
-        self,
-        dim: None | Dim = None,
-        keepdim: BoolLikeType = False,
-    ) -> Tensor:
-        """Compute the standard deviation of elements in the tensor
-        across a specified dimension.
-
-        This method computes the standard deviation of all elements in
-        the tensor if no dimension is provided. If a dimension is
-        specified, the method reduces the tensor along the given
-        dimension while optionally retaining the reduced dimensions.
-
-        :param dim: The dimension along which to compute the standard
-            deviation, defaults to `None`. For `None`, the standard
-            deviation is computed over all elements of the tensor.
-        :param keepdim: A boolean indicating whether to retain the
-            reduced dimensions in the resulting tensor, defaults to
-            `False`.
-        :return: A new tensor containing the standard deviation of the
-            specified elements.
-        """
-        return slowtorch.nn.functional.std(self, dim, keepdim)
-
-    def exp(self) -> Tensor:
-        """Perform element-wise exponentiation of the tensor.
-
-        This method supports exponentiation. The resulting tensor is of
-        the same shape and dtype as the input. The exponentiation
-        function is defined as::
-
-            exp(x) = math.exp(x)
-
-        :return: A new tensor containing the result of the element-wise
-            exponentiation.
-        """
-        return slowtorch.nn.functional.exp(self)
-
-    def sqrt(self) -> Tensor:
-        """Perform element-wise square root of a tensor.
-
-        This function computes the square root of each element in the
-        input tensor. The result is returned as a new tensor, and
-        gradients are properly propagated during backpropagation.
-
-        :return: A new tensor containing the square root of each element
-            in the input tensor.
-        """
-        return slowtorch.nn.functional.sqrt(self)
-
-    def relu(self) -> Tensor:
-        """Apply the Rectified Linear Unit (ReLU) function element-wise.
-
-        ReLU sets all negative values in the tensor to zero and keeps
-        positive values unchanged. This operation is differentiable, and
-        gradients are propagated only for positive elements. The relu
-        function is defined as::
-
-            relu(x) = max(x, 0)
-
-        :return: Output tensor after applying the ReLU function, with
-            gradients linked for backpropagation.
-        """
-        return slowtorch.nn.functional.relu(self)
-
-    def elu(self, alpha: FloatLikeType = 1.0) -> Tensor:
-        """Apply the Exponential Linear Unit (ELU) function element-
-        wise.
-
-        ELU is a function that tend to converge cost to zero faster and
-        produce more accurate results. This operation is differentiable,
-        and gradients are propagated only for positive elements. The elu
-        function is defined as::
-
-            elu(x) = x if x >- 0 else alpha * (exp(x) - 1)
-
-        :param alpha: Value for the ELU formulation, defaults to 1.0.
-        :return: Output tensor after applying the ELU function, with
-            gradients linked for backpropagation.
-        """
-        return slowtorch.nn.functional.elu(self, alpha)
-
-    def tanh(self) -> Tensor:
-        """Apply the Hyperbolic Tangent (Tanh) function element-wise.
-
-        Tanh squashes all the values between the range of -1 to 1. This
-        operation is differentiable, and gradients are propagated. The
-        tanh function is defined as::
-
-            tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
-
-        :return: Output tensor after applying the Tanh function, with
-            gradients linked for backpropagation.
-        """
-        return slowtorch.nn.functional.tanh(self)
-
-    def sigmoid(self) -> Tensor:
-        """Apply the Sigmoid function element-wise.
-
-        Sigmoid function squashes between 0 and 1. This operation is
-        differentiable, and gradients are propagated. The sigmoid
-        function is defined as::
-
-            sigmoid(x) = 1 / (1 + exp(-x))
-
-        :return: Output tensor after applying the Sigmoid function, with
-            gradients linked for backpropagation.
-        """
-        return slowtorch.nn.functional.sigmoid(self)
-
-    def softmax(
-        self,
-        dim: None | Dim = None,
-        dtype: None | Dtype = None,
-    ) -> Tensor:
-        """Apply the Softmax function element-wise.
-
-        Softmax function squashes between 0 and 1, along the provided
-        dimension and sum to 1. This operation is differentiable, and
-        gradients are propagated. The softmax function is defined as::
-
-            softmax(x) = exp(x) / exp(x).sum()
-
-        :param dim: A dimension along which softmax will be computed,
-            defaults to `None`.
-        :return: Output tensor after applying the Softmax function, with
-            gradients linked for backpropagation.
-        """
-        return slowtorch.nn.functional.softmax(self, dim=dim, dtype=dtype)
-
-    def log_softmax(
-        self,
-        dim: None | Dim = None,
-        dtype: None | Dtype = None,
-    ) -> Tensor:
-        """Apply the Softmax function followed by Logarithm.
-
-        This is mathematically equivalent to applying softmax function
-        followed by logarith. This operation is differentiable, and
-        gradients are propagated.
-
-        :param dim: A dimension along which softmax will be computed,
-            defaults to `None`.
-        :return: Output tensor after applying the Log softmax function,
-            with gradients linked for backpropagation.
-        """
-        return slowtorch.nn.functional.log_softmax(self, dim=dim, dtype=dtype)
-
-
-Input: t.TypeAlias = Scalar | Tensor
-StorageWeakRef: t.TypeAlias = t.Sequence[Input]
-TensorOrTensors: t.TypeAlias = tuple[Tensor, ...] | Tensor
-
-
-@function_dispatch
-def save(
-    obj: object,
-    f: FileLike,
-    pickle_module: types.ModuleType = pickle,
-    pickle_protocol: t.Literal[2] = 2,
-) -> None:
-    """Save an object to disk file."""
-    with open(f, "wb") as opened_file:
-        pickle_module.dump(obj, opened_file, protocol=pickle_protocol)
-
-
-@function_dispatch
-def load(
-    f: FileLike,
-    pickle_module: types.ModuleType = pickle,
-    weights_only: None | BoolLikeType = None,
-) -> t.Any:
-    """Load an object saved from a file."""
-    weights_only = weights_only
-    with open(f, "rb") as opened_file:
-        output = pickle_module.load(opened_file)
-    return output
-
-
-@function_dispatch
-def typename(obj: t.Any) -> t.Any:
-    """String representation of the type of an object.
-
-    This function returns a fully qualified string representation of an
-    object's type.
-
-    :param obj: The object whose type to represent
-    :return: The type of the object.
-    """
-    if isinstance(obj, Tensor):
-        return f"slowtorch.{obj.dtype.typename}"
-    module = "slowtorch" or ""
-    qualname = ""
-    if hasattr(obj, "__qualname__"):
-        qualname = obj.__qualname__
-    elif hasattr(obj, "__name__"):
-        qualname = obj.__name__
-    else:
-        module = obj.__class__.__module__ or ""
-        qualname = obj.__class__.__qualname__
-    if module in {"", "builtins"}:
-        return qualname
-    return f"{module}.{qualname}"
-
-
-@function_dispatch
-def dtypecheck(dtype: None | t.Any) -> Dtype:
-    """Return a valid SlowTorch dtype based on the provided value.
-
-    :param dtype: A dtype-like object or Python primitive. If `None`,
-        defaults to `slowtorch.float32`.
-    :return: A canonical SlowTorch Dtype (`float32`, `int64`, or `bool`).
-    """
-    if dtype is None:
-        return slowtorch.float32
-    name = getattr(dtype, "name", None)
-    if isinstance(name, str):
-        if name.startswith("float"):
-            return slowtorch.float32
-        if name.startswith("int"):
-            return slowtorch.int64
-        return slowtorch.bool
-    if isinstance(dtype, float):
-        return slowtorch.float32
-    if isinstance(dtype, int):
-        return slowtorch.int64
-    return slowtorch.bool

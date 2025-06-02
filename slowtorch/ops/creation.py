@@ -1,16 +1,17 @@
 """\
-SlowTorch Functions API
-=======================
+SlowTorch Tensor Creation
+=========================
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Monday, January 13 2025
-Last updated on: Saturday, May 31 2025
+Created on: Sunday, June 01 2025
+Last updated on: Sunday, June 01 2025
+
+Tensor creation operations.
 
 This module provides essential tensor creation and initialisation
-utilities for the `slowtorch` package. It contains a suite of functions
-designed to construct and populate `Tensor` objects with various
-patterns and values, mimicking the functionality of PyTorch's core
-tensor creation routines.
+utilities. It contains a suite of functions designed to construct and
+populate `Tensor` objects with various patterns and values, mimicking
+the functionality of PyTorch's core tensor creation routines.
 
 This module serves as the foundation for generating tensors with specific
 sizes, patterns, and values. These utilities are essential for
@@ -20,64 +21,36 @@ PyTorch's tensor creation APIs, this module brings similar functionality
 to `slowtorch` with a focus on educational clarity, pure Python
 implementation, and modular design.
 
-The following functions are implemented in this module::
+.. note::
 
-    - Tensor Creation Functions
-    - Pattern-Based Tensor Functions
-    - Tensor Transformation Functions
-
-This module is designed to balance functionality and clarity, making it
-both a practical tool and an educational resource. Key principles
-guiding its implementation include::
-
-    - Consistency: Functions follow predictable naming conventions and
-      parameter usage, ensuring a seamless experience for users familiar
-      with PyTorch.
-    - Flexibility: Support for multiple data types, sizes, and device
-      layouts.
-    - Simplicity: Implementations prioritise readability and modularity,
-      enabling users to explore and extend functionality with ease.
-    - Educational Value: As part of the `slowtorch` project, this module
-      emphasises the learning of tensor mechanics and API design.
-
-The tensor creation functions in this module are ideal for::
-
-    - Initialising tensors for numerical computations.
-    - Creating test datasets for algorithm development.
-    - Prototyping applications that require structured numerical data.
-    - Exploring the mechanics of multidimensional tensor creation in
-      Python.
-
-The implementations in this module are not optimised for performance and
-are intended for learning and exploratory purposes. For production-grade
-numerical computation, consider using PyTorch directly.
+    The implementations in this module are not optimised for performance
+    and are intended for learning and exploratory purposes. For
+    production-grade numerical computation, consider using PyTorch
+    directly.
 """
 
 from __future__ import annotations
 
-import itertools
 import math
 import typing as t
 from collections.abc import Iterable
 
 import slowtorch
 from slowtorch import function_dispatch
-from slowtorch._random import Generator
-from slowtorch._random import default_generator
-from slowtorch._tensor import BoolLikeType
-from slowtorch._tensor import DeviceType
-from slowtorch._tensor import Dtype
-from slowtorch._tensor import IntLikeType
-from slowtorch._tensor import ShapeType
-from slowtorch._tensor import StorageWeakRef
-from slowtorch._tensor import Tensor
-from slowtorch._tensor import check_same_shape
-from slowtorch._tensor import dtypecheck
-from slowtorch._tensor import infer_size_shapes
-from slowtorch._types import ArrayLikeOrScalar
-from slowtorch._types import FloatLikeType
-from slowtorch._types import Scalar
-from slowtorch._utils import _fill_tensor
+from slowtorch.internal.shape import check_same_shape
+from slowtorch.internal.shape import infer_size_shapes
+from slowtorch.internal.tensor import Tensor
+from slowtorch.utils import dtypecheck
+
+if t.TYPE_CHECKING:
+    from slowtorch.types import ArrayLikeOrScalar
+    from slowtorch.types import BoolLikeType
+    from slowtorch.types import DeviceType
+    from slowtorch.types import Dtype
+    from slowtorch.types import IntLikeType
+    from slowtorch.types import Scalar
+    from slowtorch.types import ShapeType
+    from slowtorch.types import StorageWeakRef
 
 
 @function_dispatch
@@ -113,8 +86,8 @@ def tensor(
     def chain_from_iterable(a: ArrayLikeOrScalar) -> None:
         """Recursively flatten the input iterable."""
         if isinstance(a, Iterable) and not isinstance(data, (str, bytes)):
-            for idx in a:
-                chain_from_iterable(idx)
+            for index in a:
+                chain_from_iterable(index)
         else:
             storage.append(a)
 
@@ -133,220 +106,6 @@ def tensor(
     new_tensor = Tensor(size, dtype, device, requires_grad)
     new_tensor[:] = storage
     return new_tensor
-
-
-@function_dispatch
-def randn(
-    *size: IntLikeType,
-    generator: None | Generator = None,
-    dtype: None | Dtype = None,
-    device: None | DeviceType = None,
-    requires_grad: BoolLikeType = False,
-) -> Tensor:
-    """Return a tensor filled with random numbers from a normal
-    distribution with mean 0 and variance 1.
-
-    :param size: Dimensions of the tensor.
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
-    :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random numbers.
-    """
-    if generator is None:
-        generator = default_generator
-    if not isinstance(size, (int, Iterable)):
-        raise TypeError(
-            "Expected a sequence of integers or a single integer, "
-            f"got {size!r}"
-        )
-    dtype = dtypecheck(dtype)
-    if not dtype == slowtorch.float32:
-        raise RuntimeError(
-            f"'normal' not implemented for {dtype.typename[:-6]!r}"
-        )
-    shape: ShapeType
-    if len(size) == 1 and isinstance(size[0], Iterable):
-        shape = size[0]
-    else:
-        shape = size
-    new_tensor = Tensor(shape, dtype, device, requires_grad)
-    numel = 1
-    for dim in shape:
-        numel *= dim
-    values = (generator.internal.gauss(0, 1) for _ in range(numel))
-    _fill_tensor(new_tensor, values)
-    return new_tensor
-
-
-@function_dispatch
-def rand(
-    *size: IntLikeType,
-    generator: None | Generator = None,
-    dtype: None | Dtype = None,
-    device: None | DeviceType = None,
-    requires_grad: BoolLikeType = False,
-) -> Tensor:
-    """Return a tensor filled with random numbers from a uniform
-    distribution on the interval [0, 1).
-
-    :param size: Dimensions of the tensor.
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
-    :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random numbers.
-    """
-    if generator is None:
-        generator = default_generator
-    if not isinstance(size, (int, Iterable)):
-        raise TypeError(
-            "Expected a sequence of integers or a single integer, "
-            f"got {size!r}"
-        )
-    dtype = dtypecheck(dtype)
-    if not dtype == slowtorch.float32:
-        raise RuntimeError(
-            f"'uniform' not implemented for {dtype.typename[:-6]!r}"
-        )
-    shape: ShapeType
-    if len(size) == 1 and isinstance(size[0], Iterable):
-        shape = size[0]
-    else:
-        shape = size
-    new_tensor = Tensor(shape, dtype, device, requires_grad)
-    numel = 1
-    for dim in shape:
-        numel *= dim
-    values = (generator.internal.uniform(0, 1) for _ in range(numel))
-    _fill_tensor(new_tensor, values)
-    return new_tensor
-
-
-@function_dispatch
-def randint(
-    low: IntLikeType = 0,
-    high: None | IntLikeType = None,
-    size: None | ShapeType = None,
-    generator: None | Generator = None,
-    dtype: None | Dtype = None,
-    device: None | DeviceType = None,
-    requires_grad: BoolLikeType = False,
-) -> Tensor:
-    """Return a tensor filled with random numbers from a uniform
-    distribution between low (inclusive) and high (exclusive).
-
-    :param low: Lower bound (inclusive), defaults to 0.
-    :param high: Upper bound (exclusive), defaults to `None`.
-    :param size: Dimensions of the tensor, defaults to `None`.
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
-    :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random integers from range [low, high].
-    """
-    if generator is None:
-        generator = default_generator
-    if high is None:
-        low, high = 0, low
-    if size is None:
-        raise ValueError("Size must be tuple of ints, not None")
-    if dtype is None:
-        dtype = slowtorch.int64
-    if isinstance(size, tuple):
-        shape: ShapeType
-        if len(size) == 1 and isinstance(size[0], Iterable):
-            shape = size[0]
-        else:
-            shape = size
-        new_tensor = Tensor(shape, dtype, device, requires_grad)
-        numel = 1
-        for dim in shape:
-            numel *= dim
-        values = (
-            generator.internal.randint(low, high - 1) for _ in range(numel)
-        )
-        _fill_tensor(new_tensor, values)
-        return new_tensor
-    else:
-        raise TypeError(f"Expected a sequence of integers got {size!r}")
-
-
-@function_dispatch
-def randperm(
-    n: IntLikeType,
-    generator: None | Generator = None,
-    dtype: None | Dtype = None,
-    device: None | DeviceType = None,
-    requires_grad: BoolLikeType = False,
-) -> Tensor:
-    """Return a tensor filled with random permutation of integers from
-    0 to n - 1.
-
-    :param n: The upper bound (exclusive).
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
-    :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random integers from range [low, high].
-    """
-    if generator is None:
-        generator = default_generator
-    if dtype is None:
-        dtype = slowtorch.int64
-    new_tensor = Tensor(n, dtype, device, requires_grad)
-    storage = list(range(n))
-    generator.internal.shuffle(storage)
-    new_tensor[:] = storage
-    return new_tensor
-
-
-@function_dispatch
-def uniform_(
-    tensor: Tensor,
-    a: FloatLikeType = 0.0,
-    b: FloatLikeType = 1.0,
-    generator: None | Generator = None,
-) -> Tensor:
-    """Fill the input tensor with values drawn from a uniform
-    distribution U(a, b).
-
-    The uniform distribution U(a, b) generates values such that::
-
-        U(a, b) = a <= x < b
-
-    :param tensor: The tensor to initialize.
-    :param a: The lower bound of the uniform distribution (inclusive),
-        defaults to 0.0.
-    :param b: The upper bound of the uniform distribution (exclusive),
-        defaults to 1.0.
-    :return: The modified tensor.
-    :raises ValueError: If `a` >= `b`.
-    """
-    if a >= b:
-        raise ValueError(f"Invalid range, a ({a}) must be less than b ({b})")
-    if generator is None:
-        generator = default_generator
-    size = tensor.shape
-    N = range(max(size))
-    for dim in itertools.product(N, N):
-        try:
-            tensor[dim] = generator.internal.uniform(a, b)
-        except IndexError:
-            continue
-    return tensor
 
 
 @function_dispatch
@@ -711,7 +470,7 @@ def arange(
     if dtype is None:
         dtype = (
             slowtorch.int64
-            if all(isinstance(idx, int) for idx in (start, end, step))
+            if all(isinstance(index, int) for index in (start, end, step))
             else slowtorch.float32
         )
     new_tensor = empty(
@@ -720,7 +479,7 @@ def arange(
         device=device,
         requires_grad=requires_grad,
     )
-    new_tensor[:] = (start + idx * step for idx in range(size))
+    new_tensor[:] = (start + index * step for index in range(size))
     return new_tensor
 
 
@@ -756,34 +515,24 @@ def linspace(
         steps, dtype=dtype, device=device, requires_grad=requires_grad
     )
     jump = (end - start) / (steps - 1) if steps > 1 else 0
-    new_tensor[:] = (start + idx * jump for idx in range(steps))
+    new_tensor[:] = (start + index * jump for index in range(steps))
     return new_tensor
 
 
 @function_dispatch
-def cat(
-    tensors: t.Sequence[Tensor],
-    dim: IntLikeType = 0,
-) -> Tensor:
-    """Concatenate the given sequence of tensors in the given dimension.
+def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
+    """Convert a tensor of class indices to a one-hot encoded tensor.
 
-    The `cat` function creates an tensor with the same size as the input
-    tensors.
-
-    :param tensors: Sequence of tensors of same type.
-    :param dim: Dimension over which the tensors are concatenated,
-        defaults to 0.
-    :return: A new tensor concatenated over the provided dimension.
+    :param tensor: Tensor of arbitrary shape containing integer class
+        indices.
+    :param num_classes: Total number of classes, defaults to -1.
+        If -1, inferred from tensor as `tensor.max() + 1`.
+    :return: One-hot encoded tensor.
     """
-    if not all(map(lambda x: x.shape == tensors[0].shape, tensors)):
-        raise ValueError("Tensors must have same shapes and dimensions")
-    size = list(tensors[0].shape)
-    size[dim] = size[dim] * len(tensors)
-    new_tensor = empty(*size, dtype=tensors[0].dtype)
-    offset = 0
-    for tensor in tensors:
-        slices = [slice(None)] * len(tensor.shape)
-        slices[dim] = slice(offset, offset + tensor.shape[dim])
-        new_tensor[tuple(slices)] = tensor
-        offset += tensor.shape[dim]
-    return new_tensor
+    flat = tensor.reshape(-1)
+    if num_classes == -1:
+        num_classes = flat.max().item() + 1
+    new_tensor = slowtorch.zeros(len(flat), num_classes, dtype=slowtorch.int64)
+    for index in range(len(new_tensor)):
+        new_tensor[index][flat[index]] = 1
+    return new_tensor.reshape(*tensor._shape, num_classes)

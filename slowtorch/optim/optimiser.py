@@ -32,9 +32,11 @@ from __future__ import annotations
 
 import typing as t
 
-from slowtorch._tensor import BoolLikeType
-from slowtorch._tensor import FloatLikeType
-from slowtorch._tensor import Tensor
+from slowtorch.internal.tensor import Tensor
+
+if t.TYPE_CHECKING:
+    from slowtorch.types import BoolLikeType
+    from slowtorch.types import FloatLikeType
 
 __all__ = [
     "Optimiser",

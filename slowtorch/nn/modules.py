@@ -50,16 +50,18 @@ import typing as t
 from collections import OrderedDict
 
 import slowtorch
-from slowtorch import randn
-from slowtorch._tensor import DeviceType
-from slowtorch._tensor import Dim
-from slowtorch._tensor import Dtype
-from slowtorch._tensor import Tensor
-from slowtorch._types import BoolLikeType
-from slowtorch._types import FloatLikeType
-from slowtorch._types import IntLikeType
-from slowtorch._utils import set_module
-from slowtorch._variable_functions import uniform_
+from slowtorch.internal.tensor import Tensor
+from slowtorch.ops.random import randn
+from slowtorch.ops.random import uniform_
+from slowtorch.utils import set_module
+
+if t.TYPE_CHECKING:
+    from slowtorch.types import BoolLikeType
+    from slowtorch.types import DeviceType
+    from slowtorch.types import Dim
+    from slowtorch.types import Dtype
+    from slowtorch.types import FloatLikeType
+    from slowtorch.types import IntLikeType
 
 __all__: list[str] = []
 
@@ -98,8 +100,6 @@ class Parameter(Tensor):
         to `True`.
     """
 
-    __slots__ = ()
-
     def __init__(
         self,
         data: None | Tensor = None,
@@ -111,17 +111,8 @@ class Parameter(Tensor):
         else:
             data = data.clone()
         data.requires_grad = requires_grad
-        super().__init__(
-            shape=data._shape,
-            dtype=data._dtype,
-            device=data.device,
-            requires_grad=requires_grad,
-        )
-        self[...] = data[...]
-        self.grad_fn = data.grad_fn
-        self.grad = data.grad
-        self._base = data._base
-        self.data = self
+        for key, value in data.__dict__.items():
+            setattr(self, key, value)
 
     @property
     def data(self) -> Tensor:
