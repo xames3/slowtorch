@@ -1,31 +1,19 @@
 """\
-SlowTorch Optimiser API
-=======================
+SlowTorch Base Optimiser
+========================
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, May 01 2025
 Last updated on: Friday, May 02 2025
 
-This module provides a foundational framework for implementing
-gradient-based optimisers in SlowTorch. Inspired by PyTorch's
-`torch.optim`, it allows users to define and experiment with custom
-optimisation strategies while maintaining clarity and pedagogical
-structure. The `Optimiser` class serves as the abstract base for all
-optimisers. It manages parameter grouping, gradient resetting, and
-shared configuration across parameter groups. It is designed to be
-subclassed by concrete optimisation strategies.
-
-This module provides key capabilities such as::
-
-    1. Parameter Group Management: Parameters are organised into groups
-       with shared hyperparameters. Groups may be individually
-       configured, enabling fine-grained control over learning rates and
-       other settings.
-    2. Gradient Resetting: A unified method for resetting gradients
-       ensures that stale gradients do not accumulate across iterations.
-    3. Extendable Design: New optimisers can be built by subclassing
-       the `Optimiser` class and implementing the `step` method,
-       following familiar interfaces.
+This module provides a foundational APIs for implementing gradient-based
+optimisers in this library. Inspired by PyTorch's `torch.optim`, it
+allows to define and experiment with custom optimisation strategies while
+maintaining clarity and pedagogical structure. The `Optimiser` class
+serves as the abstract base for all optimisers. It manages parameter
+grouping, gradient resetting, and shared configuration across parameter
+groups. It is designed to be subclassed by concrete optimisation
+strategies.
 """
 
 from __future__ import annotations
@@ -37,19 +25,14 @@ from slowtorch.internal.tensor import Tensor
 if t.TYPE_CHECKING:
     from slowtorch.types import BoolLikeType
     from slowtorch.types import FloatLikeType
+    from slowtorch.types import ParamGroup
+    from slowtorch.types import ParamsT
 
 __all__ = [
     "Optimiser",
     "Optimizer",
     "SGD",
 ]
-
-ParamsT: t.TypeAlias = (
-    t.Iterable[Tensor]
-    | t.Iterable[dict[str, t.Any]]
-    | t.Iterable[tuple[str, Tensor]]
-)
-ParamGroup: t.TypeAlias = dict[str, t.Any]
 
 
 class Optimiser:

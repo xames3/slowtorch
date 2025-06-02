@@ -138,6 +138,8 @@ venv/
 *.code-workspace
 
 # My mess
-archive/*
-reports/*
+experiment.py
+profiler.py
+archive/
+reports/
 *.bak

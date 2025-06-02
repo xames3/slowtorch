@@ -1,6 +1,6 @@
 """\
-SlowTorch Optimiser APIs
-========================
+SlowTorch Optimiser
+===================
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Thursday, May 01 2025

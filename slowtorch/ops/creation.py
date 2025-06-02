@@ -517,22 +517,3 @@ def linspace(
     jump = (end - start) / (steps - 1) if steps > 1 else 0
     new_tensor[:] = (start + index * jump for index in range(steps))
     return new_tensor
-
-
-@function_dispatch
-def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
-    """Convert a tensor of class indices to a one-hot encoded tensor.
-
-    :param tensor: Tensor of arbitrary shape containing integer class
-        indices.
-    :param num_classes: Total number of classes, defaults to -1.
-        If -1, inferred from tensor as `tensor.max() + 1`.
-    :return: One-hot encoded tensor.
-    """
-    flat = tensor.reshape(-1)
-    if num_classes == -1:
-        num_classes = flat.max().item() + 1
-    new_tensor = slowtorch.zeros(len(flat), num_classes, dtype=slowtorch.int64)
-    for index in range(len(new_tensor)):
-        new_tensor[index][flat[index]] = 1
-    return new_tensor.reshape(*tensor._shape, num_classes)
