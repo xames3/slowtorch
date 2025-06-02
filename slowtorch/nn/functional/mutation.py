@@ -14,21 +14,29 @@ semantics of PyTorch's mutating functions.
 
 .. note::
 
-    All functions support auto-differentiation (backpropagation).
+    All functions support auto-differentiation (backpropagation) except
+    for `one_hot`.
 """
 
 from __future__ import annotations
 
+import typing as t
+
+import slowtorch
 from slowtorch import function_dispatch
 from slowtorch.internal.tensor import Node
 from slowtorch.internal.tensor import Tensor
+
+if t.TYPE_CHECKING:
+    from slowtorch.types import Dim
+    from slowtorch.types import IntLikeType
 
 
 @function_dispatch
 def clone(input: Tensor) -> Tensor:
     """Return a deep copy of the tensor.
 
-    This method creates a new `Tensor` instance with the same data,
+    This function creates a new `Tensor` instance with the same data,
     shape, and type as the original tensor. The copy is independent
     of the original, meaning changes to the copy do not affect the
     original tensor.
@@ -39,9 +47,9 @@ def clone(input: Tensor) -> Tensor:
 
     .. note::
 
-        [1] This method ensures that both the data and metadata of
+        [1] This function ensures that both the data and metadata of
             the tensor are duplicated.
-        [2] The `to` method is used internally for copying, ensuring
+        [2] The `to` function is used internally for copying, ensuring
             consistency and type fidelity.
     """
     new_tensor = Tensor(
@@ -69,7 +77,7 @@ def clone(input: Tensor) -> Tensor:
 def ravel(input: Tensor) -> Tensor:
     """Return a contiguous flattened tensor.
 
-    This method creates a copy of the tensor collapsed into one
+    This function creates a copy of the tensor collapsed into one
     dimension.
 
     :param input: Input tensor to be flattened.
@@ -98,10 +106,10 @@ flatten = ravel
 
 
 @function_dispatch
-def transpose(input: Tensor, dim0: int, dim1: int) -> Tensor:
+def transpose(input: Tensor, dim0: Dim, dim1: Dim) -> Tensor:
     """Transpose the tensor by permuting its dimensions.
 
-    This method returns a view of the tensor with its dimensions
+    This function returns a view of the tensor with its dimensions
     permuted. If no dimensions are specified, the dimensions are
     reversed (i.e., equivalent to a full transpose).
 
@@ -135,3 +143,22 @@ def transpose(input: Tensor, dim0: int, dim1: int) -> Tensor:
 
 
 swapaxes = swapdims = transpose
+
+
+@function_dispatch
+def one_hot(tensor: Tensor, num_classes: IntLikeType = -1) -> Tensor:
+    """Convert a tensor of class indices to a one-hot encoded tensor.
+
+    :param tensor: Tensor of arbitrary shape containing integer class
+        indices.
+    :param num_classes: Total number of classes, defaults to -1.
+        If -1, inferred from tensor as `tensor.max() + 1`.
+    :return: One-hot encoded tensor.
+    """
+    flat = tensor.reshape(-1)
+    if num_classes == -1:
+        num_classes = flat.max().item() + 1
+    new_tensor = slowtorch.zeros(len(flat), num_classes, dtype=slowtorch.int64)
+    for index in range(len(new_tensor)):
+        new_tensor[index][flat[index]] = 1
+    return new_tensor.reshape(*tensor._shape, num_classes)

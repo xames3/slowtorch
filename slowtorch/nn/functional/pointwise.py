@@ -576,8 +576,8 @@ def abs(input: Tensor) -> Tensor:
     """Return a new tensor with the absolute value of the elements of
     input.
 
-    This method creates a new `Tensor` instance with the same shape and
-    absolute values of the original tensor's elements.
+    This function creates a new `Tensor` instance with the same shape
+    and absolute values of the original tensor's elements.
 
     :param input: Input tensor.
     :return: A new tensor with the absolute values of the data and
@@ -585,8 +585,7 @@ def abs(input: Tensor) -> Tensor:
     """
     shape, requires_grad = input._shape, input.requires_grad
     new_tensor = Tensor(shape, slowtorch.float32, requires_grad=requires_grad)
-    storage: StorageWeakRef = (builtins.abs(x) for x in input)
-    new_tensor[:] = storage
+    new_tensor[:] = (builtins.abs(x) for x in input)
 
     def AbsBackward0() -> None:
         """Backpropagation implementation for absolute value.
@@ -617,8 +616,8 @@ def log(input: Tensor) -> Tensor:
     """Return a new tensor with the natural logarithm of the elements
     of input.
 
-    This method creates a new `Tensor` instance with the same shape and
-    as the original tensor but with natural logarithm calculated.
+    This function creates a new `Tensor` instance with the same shape
+    and as the original tensor but with natural logarithm calculated.
 
     :param input: Input tensor.
     :return: A new tensor with the log calculated data and shape.
