@@ -32,6 +32,7 @@ if t.TYPE_CHECKING:
     from slowtorch.internal.dtype import dtype
     from slowtorch.internal.shape import size
     from slowtorch.internal.tensor import Tensor
+    from slowtorch.nn.modules.module import Module
 
 __all__: list[str] = [
     "ArrayLike",
@@ -45,6 +46,8 @@ __all__: list[str] = [
     "IndexLike",
     "Input",
     "IntLikeType",
+    "ParamGroup",
+    "ParamsT",
     "Scalar",
     "ShapeType",
     "Size",
@@ -68,8 +71,15 @@ ArrayLikeOrScalar: t.TypeAlias = ArrayLike | Scalar
 StorageWeakRef: t.TypeAlias = t.Sequence[Input]
 StrideType: t.TypeAlias = list[IntLikeType] | tuple[IntLikeType, ...]
 TensorOrTensors: t.TypeAlias = tuple[Tensor, ...] | Tensor
+ParamGroup: t.TypeAlias = dict[str, t.Any]
+ModuleType: t.TypeAlias = t.Iterator[None | Module]
 FileLike: t.TypeAlias = (
     IntLikeType | str | bytes | os.PathLike[str] | os.PathLike[bytes]
+)
+ParamsT: t.TypeAlias = (
+    t.Iterable[Tensor]
+    | t.Iterable[dict[str, t.Any]]
+    | t.Iterable[tuple[str, Tensor]]
 )
 IndexLike: t.TypeAlias = (
     None
