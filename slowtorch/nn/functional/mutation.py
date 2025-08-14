@@ -4,7 +4,7 @@ SlowTorch Stateless Mutation
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Sunday, June 01 2025
-Last updated on: Sunday, June 01 2025
+Last updated on: Wednesday, August 13 2025
 
 Mutating operations.
 
@@ -119,9 +119,12 @@ def transpose(input: Tensor, dim0: Dim, dim1: Dim) -> Tensor:
     :return: A new tensor view with transposed dimensions.
     :raises ValueError: If the provided dimensions are invalid.
     """
-    if sorted((dim0, dim1)) != list(range(input.ndim)):
+    dim0 = dim0 if dim0 >= 0 else input.ndim + dim0
+    dim1 = dim1 if dim1 >= 0 else input.ndim + dim1
+    if dim0 < 0 or dim0 >= input.ndim or dim1 < 0 or dim1 >= input.ndim:
         raise ValueError("Invalid dimensions permutation")
-    indices = tuple(reversed(sorted((dim0, dim1))))
+    indices = list(range(input.ndim))
+    indices[dim0], indices[dim1] = indices[dim1], indices[dim0]
     shape = tuple(input._shape[index] for index in indices)
     strides = tuple(input._strides[index] for index in indices)
     new_tensor = input.as_strided(tuple(shape), tuple(strides))
