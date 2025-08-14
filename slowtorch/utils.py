@@ -66,12 +66,13 @@ class PrinterOptions:
 
 def fill(tensor: Tensor, values: Iterator[float]) -> None:
     """Recursively assign values from a flat iterator to a tensor."""
-    if hasattr(tensor, "shape") and len(tensor.shape) > 1:
-        for dim in range(tensor.shape[0]):
-            fill(tensor[dim], values)
-    else:
-        for dim in range(len(tensor)):
-            tensor[dim] = next(values)
+    if hasattr(tensor, "shape"):
+        if len(tensor.shape) > 1:
+            for dim in range(tensor.shape[0]):
+                fill(tensor[dim], values)
+        else:
+            for dim in range(len(tensor)):
+                tensor[dim] = next(values)
 
 
 def py_impl_max(arg1: t.Any, arg2: FloatLikeType = 0.0) -> t.Any:
