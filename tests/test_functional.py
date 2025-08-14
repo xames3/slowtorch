@@ -1,8 +1,8 @@
 import pytest
 import torch
-import slowtorch
-
 from torch.testing import assert_close
+
+import slowtorch
 
 from . import to_torch_tensor
 
@@ -119,7 +119,6 @@ def test_mul(tensors):
     ],
     indirect=True,
 )
-@pytest.mark.xfail(reason="Gradient calculation needs work")
 def test_div(tensors):
     torch_tensor, slowtorch_tensor = tensors
     primary = torch.div(torch_tensor, torch_tensor)
@@ -154,32 +153,32 @@ def test_div(tensors):
     ],
     indirect=True,
 )
-@pytest.mark.xfail(reason="Gradient calculation needs work")
 def test_matmul(tensors):
     torch_tensor, slowtorch_tensor = tensors
     try:
         primary = torch.matmul(torch_tensor, torch_tensor)
+        against = slowtorch.matmul(slowtorch_tensor, slowtorch_tensor)
+        assert_close(
+            primary.detach(),
+            to_torch_tensor(against),
+            rtol=1e-3,
+            atol=1e-3,
+        )
+        if torch_tensor.grad is not None:
+            torch_tensor.grad.zero_()
+        if slowtorch_tensor.grad is not None:
+            slowtorch_tensor.grad = 0.0
+        primary.sum().backward()
+        against.sum().backward()
+        assert_close(
+            torch_tensor.grad,
+            to_torch_tensor(slowtorch_tensor.grad),
+            rtol=1e-3,
+            atol=1e-3,
+        )
     except RuntimeError:
-        pass
-    against = slowtorch.matmul(slowtorch_tensor, slowtorch_tensor)
-    assert_close(
-        primary.detach(),
-        to_torch_tensor(against),
-        rtol=1e-3,
-        atol=1e-3,
-    )
-    if torch_tensor.grad is not None:
-        torch_tensor.grad.zero_()
-    if slowtorch_tensor.grad is not None:
-        slowtorch_tensor.grad = 0.0
-    primary.sum().backward()
-    against.sum().backward()
-    assert_close(
-        torch_tensor.grad,
-        to_torch_tensor(slowtorch_tensor.grad),
-        rtol=1e-3,
-        atol=1e-3,
-    )
+        with pytest.raises((ValueError, RuntimeError)):
+            slowtorch.matmul(slowtorch_tensor, slowtorch_tensor)
 
 
 @pytest.mark.parametrize(
@@ -652,7 +651,6 @@ def test_relu(tensors):
     ],
     indirect=True,
 )
-@pytest.mark.xfail(reason="Gradient calculation needs work")
 def test_elu(tensors):
     torch_tensor, slowtorch_tensor = tensors
     primary = torch.nn.functional.elu(torch_tensor)
