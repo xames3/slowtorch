@@ -4,7 +4,7 @@ SlowTorch Stateless Pointwise
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Sunday, June 01 2025
-Last updated on: Sunday, June 01 2025
+Last updated on: Wednesday, August 13 2025
 
 Pointwise operations.
 
@@ -90,7 +90,7 @@ def add(input: Tensor, other: Input) -> Tensor:
         grad = new_tensor.grad
         if None in (input.grad, other.grad):
             input.grad = Tensor(input._shape, dtype)
-            other.grad = Tensor(input._shape, dtype)
+            other.grad = Tensor(other._shape, dtype)
         input.grad += grad
         other.grad += grad
 
@@ -149,7 +149,7 @@ def sub(input: Tensor, other: Input) -> Tensor:
         grad = new_tensor.grad
         if None in (input.grad, other.grad):
             input.grad = Tensor(input._shape, dtype)
-            other.grad = Tensor(input._shape, dtype)
+            other.grad = Tensor(other._shape, dtype)
         input.grad += grad
         other.grad -= grad
 
@@ -208,7 +208,7 @@ def mul(input: Tensor, other: Input) -> Tensor:
         grad = new_tensor.grad
         if None in (input.grad, other.grad):
             input.grad = Tensor(input._shape, dtype)
-            other.grad = Tensor(input._shape, dtype)
+            other.grad = Tensor(other._shape, dtype)
         input.grad += other * grad
         other.grad += input * grad
 
@@ -277,11 +277,12 @@ def div(
         them.
         """
         grad = new_tensor.grad
-        if None in (input.grad, other.grad):
+        if input.grad is None:
             input.grad = Tensor(input._shape, slowtorch.float32)
+        if other.grad is None:
             other.grad = Tensor(input._shape, slowtorch.float32)
         input.grad += grad / other
-        other.grad -= (input / (other * other)) * grad
+        other.grad += (-grad * input) / (other * other)
 
     new_tensor.grad_fn = Node(DivBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -335,7 +336,7 @@ def matmul(input: Tensor, other: Tensor) -> Tensor:
             )
         new_tensor = Tensor(1, dtype, requires_grad=requires_grad)
         new_tensor[...] = accumulated_storage
-    elif input.ndim == 2 or other.ndim == 2:
+    elif input.ndim == 2 and other.ndim == 2:
         if input._shape[1] != other._shape[0]:
             raise ValueError(
                 "Shapes are not aligned for matrix multiplication"
@@ -415,11 +416,27 @@ def matmul(input: Tensor, other: Tensor) -> Tensor:
         them.
         """
         grad = new_tensor.grad
-        if None in (input.grad, other.grad):
+        if input.grad is None:
             input.grad = Tensor(input._shape, dtype)
-            other.grad = Tensor(input._shape, dtype)
-        input.grad += grad @ other
-        other.grad += input @ grad
+        if other.grad is None:
+            other.grad = Tensor(other._shape, dtype)
+        if input.ndim == 1 and other.ndim == 1:
+            input.grad += grad * other
+            other.grad += grad * input
+        elif input.ndim == 2 and other.ndim == 2:
+            input.grad += grad @ other.transpose(1, 0)
+            other.grad += input.transpose(1, 0) @ grad
+        else:
+            if other.ndim >= 2:
+                _other = other.transpose(-2, -1)
+            else:
+                _other = other
+            if input.ndim >= 2:
+                _input = input.transpose(-2, -1)
+            else:
+                _input = input
+            input.grad += grad @ _other
+            other.grad += _input @ grad
 
     new_tensor.grad_fn = Node(DotBackward0)
     new_tensor.grad_fn.inputs = (input, other)
@@ -508,7 +525,7 @@ def remainder(input: Tensor, other: Input) -> Tensor:
         grad = new_tensor.grad
         if None in (input.grad, other.grad):
             input.grad = Tensor(input._shape, dtype)
-            other.grad = Tensor(input._shape, dtype)
+            other.grad = Tensor(other._shape, dtype)
         input.grad += grad
         other.grad -= (input // other) * grad
 
@@ -827,11 +844,12 @@ def elu(input: Tensor, alpha: FloatLikeType = 1.0) -> Tensor:
             [1] https://ml-cheatsheet.readthedocs.io/en/latest/
                 activation_functions.html#elu
         """
-        if None in (input.grad,):
+        if input.grad is None:
             input.grad = Tensor(input._shape, input.dtype)
-        input.grad += (
-            1.0 if new_tensor > 0 else alpha * math.exp(new_tensor)
-        ) * new_tensor.grad
+        grad = Tensor(input._shape, slowtorch.float32)
+        for idx in pdt(*[range(dim) for dim in input._shape]):
+            grad[idx] = 1.0 if input[idx] > 0 else alpha * math.exp(input[idx])
+        input.grad += grad * new_tensor.grad
 
     new_tensor.grad_fn = Node(EluBackward0)
     new_tensor.grad_fn.inputs = (input,)
