@@ -1,6 +1,6 @@
 .. Author: Akshay Mestry <xa@mes3.dev>
 .. Created on: Thursday, October 10 2024
-.. Last updated on: Wednesday, May 28 2025
+.. Last updated on: Wednesday, August 13 2025
 
 ===============================================================================
 SlowTorch
@@ -1151,7 +1151,7 @@ Below is a small demonstration of what SlowTorch can do, albeit... slowly.
     >>> optimiser = slowtorch.optim.SGD(model.parameters(), 0.1, momentum=0.1)
     >>> 
     >>> for epoch in range(epochs):
-    ...     ypred = model(ys)
+    ...     ypred = model(xs)
     ...     loss = criterion(ypred, ys)
     ...     optimiser.zero_grad()
     ...     loss.backward()
