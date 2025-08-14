@@ -1,6 +1,6 @@
 """\
-SlowTorch Random Tensors
-========================
+SlowTorch Random Module
+=======================
 
 Author: Akshay Mestry <xa@mes3.dev>
 Created on: Sunday, June 01 2025
@@ -8,14 +8,10 @@ Last updated on: Sunday, June 01 2025
 
 Random sampling operations.
 
-This module implements core random operations used to initialise or
-generate tensors with stochastic values. These functions mimic the API
-and semantics of PyTorch's random ops (e.g., `randn`, `randint`,
-`randperm`), but are implemented using only Python's standard libraries
-like `random` and `math`.
-
-This module is essential for testing, weight initialization, and any
-operation involving randomness.
+This module provides functions to generate random tensors with various
+distributions, including normal, uniform, and integer distributions. It
+also includes functions for generating random permutations and filling
+tensors with uniform random values.
 """
 
 from __future__ import annotations
@@ -50,17 +46,26 @@ def randn(
     requires_grad: BoolLikeType = False,
 ) -> Tensor:
     """Return a tensor filled with random numbers from a normal
-    distribution with mean 0 and variance 1.
+    distribution with mean 0 and standard deviation 1.
 
     :param size: Dimensions of the tensor.
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
+    :param generator: Pseudorandom number generator, defaults to `None`.
     :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random numbers.
+    :param device: Device on which the tensor is created, defaults
+        to `None`.
+    :param requires_grad: If autograd should record operations,
+        defaults to `False`.
+    :return: Tensor of random numbers from a normal distribution.
+    :raises TypeError: If `size` is not a sequence of integers or a
+        single integer.
+    :raises RuntimeError: If `dtype` is not `slowtorch.float32`.
+
+    .. note::
+
+        [1] The normal distribution is defined as N(0, 1), where
+            0 is the mean and 1 is the standard deviation.
+        [2] The `dtype` must be `slowtorch.float32` as other types
+            are not supported for this operation.
     """
     if generator is None:
         generator = default_generator
@@ -96,18 +101,26 @@ def rand(
     device: None | DeviceType = None,
     requires_grad: BoolLikeType = False,
 ) -> Tensor:
-    """Return a tensor filled with random numbers from a uniform
+    """Return a tensor filled with random numbers drawn from a uniform
     distribution on the interval [0, 1).
 
     :param size: Dimensions of the tensor.
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
+    :param generator: Pseudorandom number generator, defaults to `None`.
     :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random numbers.
+    :param device: Device on which the tensor is created, defaults
+        to `None`.
+    :param requires_grad: If autograd should record operations,
+        defaults to `False`.
+    :return: Tensor of random numbers from a uniform distribution.
+    :raises TypeError: If `size` is not a sequence of integers or a
+        single integer.
+    :raises RuntimeError: If `dtype` is not `slowtorch.float32`.
+
+    .. note::
+
+        [1] The uniform distribution U(0, 1) generates values such
+            that: U(0, 1) = 0 <= x < 1
+        [2] Only `slowtorch.float32` is supported for this operation.
     """
     if generator is None:
         generator = default_generator
@@ -145,20 +158,28 @@ def randint(
     device: None | DeviceType = None,
     requires_grad: BoolLikeType = False,
 ) -> Tensor:
-    """Return a tensor filled with random numbers from a uniform
-    distribution between low (inclusive) and high (exclusive).
+    """Return a tensor filled with random integers from a uniform
+    distribution in the interval [low, high).
 
     :param low: Lower bound (inclusive), defaults to 0.
     :param high: Upper bound (exclusive), defaults to `None`.
     :param size: Dimensions of the tensor, defaults to `None`.
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
+    :param generator: Pseudorandom number generator, defaults to `None`.
     :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random integers from range [low, high].
+    :param device: Device on which the tensor is created, defaults
+        to `None`.
+    :param requires_grad: If autograd should record operations,
+        defaults to `False`.
+    :return: Tensor of random integers in the specified range.
+    :raises ValueError: If `size` is `None`.
+    :raises TypeError: If `size` is not a sequence of integers or a
+        single integer.
+
+    .. note::
+
+        If `high` is `None`, the range becomes [0, low).
+        If `low` is greater than or equal to `high`, the range is
+        invalid.
     """
     if generator is None:
         generator = default_generator
@@ -195,18 +216,17 @@ def randperm(
     device: None | DeviceType = None,
     requires_grad: BoolLikeType = False,
 ) -> Tensor:
-    """Return a tensor filled with random permutation of integers from
+    """Return a tensor containing a random permutation of integers from
     0 to n - 1.
 
     :param n: The upper bound (exclusive).
-    :param generator: A pseudorandom number generator for sampling,
-        defaults to `None`.
+    :param generator: Pseudorandom number generator, defaults to `None`.
     :param dtype: Data type of the tensor, defaults to `None`.
-    :param device: Device where the tensor will be created, defaults to
-        `None`.
-    :param requires_grad: Boolean if autograd should record operations
-        on the returned tensor, defaults to `False`.
-    :return: Tensor filled with random integers from range [low, high].
+    :param device: Device on which the tensor is created, defaults
+        to `None`.
+    :param requires_grad: If autograd should record operations,
+        defaults to `False`.
+    :return: Tensor with a random permutation of integers.
     """
     if generator is None:
         generator = default_generator
@@ -233,13 +253,16 @@ def uniform_(
 
         U(a, b) = a <= x < b
 
-    :param tensor: The tensor to initialize.
-    :param a: The lower bound of the uniform distribution (inclusive),
-        defaults to 0.0.
-    :param b: The upper bound of the uniform distribution (exclusive),
-        defaults to 1.0.
+    :param tensor: The tensor to fill.
+    :param a: Lower bound (inclusive), defaults to 0.0.
+    :param b: Upper bound (exclusive), defaults to 1.0.
+    :param generator: Pseudorandom number generator, defaults to `None`.
     :return: The modified tensor.
-    :raises ValueError: If `a` >= `b`.
+    :raises ValueError: If `a` is not less than `b`.
+
+    .. note::
+
+        This function modifies the input tensor in place and returns it.
     """
     if a >= b:
         raise ValueError(f"Invalid range, a ({a}) must be less than b ({b})")
