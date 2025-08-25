@@ -44,6 +44,7 @@ __all__: list[str] = [
     "FileLike",
     "FloatLikeType",
     "IndexLike",
+    "Id",
     "Input",
     "IntLikeType",
     "ParamGroup",
@@ -73,6 +74,7 @@ StrideType: t.TypeAlias = list[IntLikeType] | tuple[IntLikeType, ...]
 TensorOrTensors: t.TypeAlias = tuple[Tensor, ...] | Tensor
 ParamGroup: t.TypeAlias = dict[str, t.Any]
 ModuleType: t.TypeAlias = t.Iterator[None | Module]
+Id: t.TypeAlias = list[IntLikeType] | IntLikeType
 FileLike: t.TypeAlias = (
     IntLikeType | str | bytes | os.PathLike[str] | os.PathLike[bytes]
 )

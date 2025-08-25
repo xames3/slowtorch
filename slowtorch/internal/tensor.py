@@ -83,6 +83,7 @@ if t.TYPE_CHECKING:
     from slowtorch.types import Dim
     from slowtorch.types import Dtype
     from slowtorch.types import FloatLikeType
+    from slowtorch.types import Id
     from slowtorch.types import IndexLike
     from slowtorch.types import Input
     from slowtorch.types import IntLikeType
@@ -1066,7 +1067,6 @@ class Tensor:
         seen: set[IntLikeType] = set()
         shown: set[IntLikeType] = set()
         counter: list[IntLikeType] = [1]
-        Id: t.TypeAlias = list[IntLikeType] | IntLikeType
         tensors: OrderedDict[IntLikeType, Id] = OrderedDict()
 
         def set_id(input: Tensor) -> None:
