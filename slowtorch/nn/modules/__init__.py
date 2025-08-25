@@ -3,8 +3,8 @@ SlowTorch Modules
 =================
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Sunday, June 01 2025
-Last updated on: Sunday, June 01 2025
+Created on: Sunday, 01 June 2025
+Last updated on: Sunday, 24 August 2025
 
 This module unifies all the child modules into one.
 """

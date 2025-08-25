@@ -3,8 +3,8 @@ SlowTorch Base Optimiser
 ========================
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Thursday, May 01 2025
-Last updated on: Friday, May 02 2025
+Created on: Thursday, 01 May 2025
+Last updated on: Sunday, 24 August 2025
 
 This module provides a foundational APIs for implementing gradient-based
 optimisers in this library. Inspired by PyTorch's `torch.optim`, it

@@ -3,8 +3,8 @@ SlowTorch
 =========
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Tuesday, January 07 2025
-Last updated on: Sunday, June 01 2025
+Created on: Tuesday, 07 January 2025
+Last updated on: Sunday, 24 August 2025
 
 SlowTorch is yet another personal pet-project of mine where I tried and
 implemented the basic and bare-bones functionality of PyTorch just using
