@@ -3,8 +3,8 @@ SlowTorch Functional
 ====================
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Sunday, June 01 2025
-Last updated on: Sunday, June 01 2025
+Created on: Sunday, 01 June 2025
+Last updated on: Sunday, 24 August 2025
 
 This module offers a comprehensive suite of stateless functions that
 perform various operations (albeit in function form).

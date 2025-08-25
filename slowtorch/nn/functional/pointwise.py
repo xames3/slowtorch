@@ -3,8 +3,8 @@ SlowTorch Stateless Pointwise
 =============================
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Sunday, June 01 2025
-Last updated on: Wednesday, August 13 2025
+Created on: Sunday, 01 June 2025
+Last updated on: Sunday, 24 August 2025
 
 Pointwise operations.
 

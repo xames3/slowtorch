@@ -3,8 +3,8 @@ SlowTorch Neural Network
 ========================
 
 Author: Akshay Mestry <xa@mes3.dev>
-Created on: Wednesday, January 15 2025
-Last updated on: Sunday, June 01 2025
+Created on: Wednesday, 15 January 2025
+Last updated on: Sunday, 24 August 2025
 """
 
 from . import functional
